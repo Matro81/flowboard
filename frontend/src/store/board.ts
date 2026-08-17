@@ -60,6 +60,12 @@ export interface FlowboardNodeData extends Record<string, unknown> {
   // Spliced into auto-prompts on downstream nodes for richer context.
   aiBrief?: string;
   aiBriefStatus?: "pending" | "done" | "failed";
+  // Character Google Flow Dual-Asset and Voice bindings
+  portraitMediaId?: string;
+  turnaroundMediaId?: string;
+  voiceId?: string;
+  voiceGender?: string;
+  voiceLanguage?: string;
   // Transient status while the GenerationDialog runs `autoPrompt` /
   // `autoPromptBatch` against this node — set to "pending" while the
   // backend is composing the prompt, cleared on success/failure. Not

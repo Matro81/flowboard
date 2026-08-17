@@ -66,3 +66,27 @@ async def auto_prompt_batch(body: AutoPromptBatchBody) -> AutoPromptBatchRespons
     except prompt_synth.PromptSynthError as exc:
         raise HTTPException(status_code=502, detail=str(exc))
     return AutoPromptBatchResponse(node_id=body.node_id, prompts=prompts)
+
+
+class TurnaroundPromptBody(BaseModel):
+    title: Optional[str] = "Character"
+    gender: Optional[str] = None
+    vibe: Optional[str] = None
+    country: Optional[str] = None
+
+
+class TurnaroundPromptResponse(BaseModel):
+    prompt: str
+
+
+@router.post("/turnaround", response_model=TurnaroundPromptResponse)
+def turnaround_prompt(body: TurnaroundPromptBody) -> TurnaroundPromptResponse:
+    """Generate 3-angle character turnaround prompt."""
+    text = prompt_synth.synth_turnaround_prompt(
+        body.title or "Character",
+        gender=body.gender,
+        vibe=body.vibe,
+        country=body.country,
+    )
+    return TurnaroundPromptResponse(prompt=text)
+

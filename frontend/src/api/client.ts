@@ -912,3 +912,32 @@ export function getFlowSyncStatus(): Promise<SyncStatusResponse> {
 export function syncBoardsUpToFlow(): Promise<SyncUpResponse> {
   return api<SyncUpResponse>("/api/flow/projects/sync-up", { method: "POST" });
 }
+
+// ── Google Flow Voices & Turnaround ────────────────────────────────────────
+
+export interface FlowVoice {
+  id: string;
+  name: string;
+  gender: string;
+  vibe: string;
+  description: string;
+  sample_text: string;
+  preview_url: string | null;
+}
+
+export function listFlowVoices(): Promise<FlowVoice[]> {
+  return api<FlowVoice[]>("/api/flow/voices");
+}
+
+export function getTurnaroundPrompt(params: {
+  title?: string;
+  gender?: string;
+  vibe?: string;
+  country?: string;
+}): Promise<{ prompt: string }> {
+  return api<{ prompt: string }>("/api/prompt/turnaround", {
+    method: "POST",
+    body: JSON.stringify(params),
+  });
+}
+

@@ -2,7 +2,16 @@ import { useEffect, useRef, useState } from "react";
 import { Handle, Position, type NodeProps } from "@xyflow/react";
 import { useBoardStore, type FlowboardNodeData, type FlowNode } from "../store/board";
 import { useGenerationStore } from "../store/generation";
-import { mediaUrl, patchEdge, patchNode, uploadImage, uploadImageFromUrl } from "../api/client";
+import {
+  mediaUrl,
+  patchEdge,
+  patchNode,
+  uploadImage,
+  uploadImageFromUrl,
+  listFlowVoices,
+  getTurnaroundPrompt,
+  type FlowVoice,
+} from "../api/client";
 import { requestAutoBrief } from "../api/autoBrief";
 import { useReferencesStore } from "../store/references";
 import {
@@ -41,69 +50,129 @@ function StatusStrip({ status }: { status?: string }) {
 const ACCEPT_MIME = "image/png,image/jpeg,image/webp,image/gif";
 
 function BriefHint({ data }: { data: FlowboardNodeData }) {
-  if (data.autoPromptStatus === "pending") {
-    return <p className="brief-hint brief-hint--pending">✨ Composing prompt…</p>;
-  }
-  if (data.aiBriefStatus === "pending") {
-    return <p className="brief-hint brief-hint--pending">✨ Analyzing…</p>;
-  }
-  if (data.aiBrief) {
-    return <p className="brief-hint" title={data.aiBrief}>✨ {data.aiBrief}</p>;
-  }
-  return null;
+  const brief = data.aiBrief;
+  const status = data.aiBriefStatus;
+  if (!brief && status !== "pending") return null;
+
+  return (
+    <div className="brief-hint" title={brief ?? "Reading visual content…"}>
+      {status === "pending" ? (
+        <span className="brief-hint__pending">Scanning visual…</span>
+      ) : (
+        <span className="brief-hint__text">{brief}</span>
+      )}
+    </div>
+  );
 }
 
-/**
- * True while the LLM layer is doing work on this node — composing an
- * auto-prompt or describing media for an aiBrief. Used to add a busy
- * treatment + disable Generate so the user can't double-fire.
- */
 function isLLMBusy(data: FlowboardNodeData): boolean {
   return (
+    data.aiBriefStatus === "pending" ||
     data.autoPromptStatus === "pending"
-    || data.aiBriefStatus === "pending"
   );
 }
 
 function CharacterBody({ rfId, data }: { rfId: string; data: FlowboardNodeData }) {
-  const mediaId = data.mediaId;
+  const portraitMediaId = (data.portraitMediaId as string) || (data.mediaId as string);
+  const turnaroundMediaId = data.turnaroundMediaId as string | undefined;
+  const currentVoiceId = (data.voiceId as string) || "";
   const isProcessing = data.status === "queued" || data.status === "running";
-  const [uploading, setUploading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [dragOver, setDragOver] = useState(false);
-  const fileInputRef = useRef<HTMLInputElement>(null);
 
-  function persistMedia(newMediaId: string, aspectRatio?: string) {
+  const [uploadingHead, setUploadingHead] = useState(false);
+  const [uploadingBody, setUploadingBody] = useState(false);
+  const [generatingTurnaround, setGeneratingTurnaround] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [dragOverHead, setDragOverHead] = useState(false);
+  const [dragOverBody, setDragOverBody] = useState(false);
+  const [voices, setVoices] = useState<FlowVoice[]>([]);
+  const [playingVoice, setPlayingVoice] = useState<string | null>(null);
+
+  const headInputRef = useRef<HTMLInputElement>(null);
+  const bodyInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    listFlowVoices().then(setVoices).catch(() => {});
+  }, []);
+
+  function persistPortrait(newMediaId: string, aspectRatio?: string) {
     useBoardStore.getState().updateNodeData(rfId, {
       mediaId: newMediaId,
+      portraitMediaId: newMediaId,
       status: "done",
       aiBrief: undefined,
       aspectRatio,
     });
     const dbId = parseInt(rfId, 10);
     if (!isNaN(dbId)) {
-      // Backend merges `data`, so we only need to send the deltas.
-      // `null` is the explicit "clear this key" sentinel — undefined
-      // gets dropped by JSON.stringify and would leave the stale brief
-      // in place after the merge.
       patchNode(dbId, {
         status: "done",
         data: {
           mediaId: newMediaId,
+          portraitMediaId: newMediaId,
           aiBrief: null,
           aspectRatio,
           renderedAt: new Date().toISOString(),
         },
       }).catch(() => {});
     }
-    // Background vision call — fire-and-forget. Sets aiBrief on the node
-    // when it returns; failure is silent.
     requestAutoBrief(rfId, newMediaId);
   }
 
-  async function uploadOwn(file: File) {
+  function persistTurnaround(newMediaId: string, aspectRatio?: string) {
+    useBoardStore.getState().updateNodeData(rfId, {
+      turnaroundMediaId: newMediaId,
+      turnaroundAspectRatio: aspectRatio,
+    });
+    const dbId = parseInt(rfId, 10);
+    if (!isNaN(dbId)) {
+      patchNode(dbId, {
+        data: {
+          turnaroundMediaId: newMediaId,
+          turnaroundAspectRatio: aspectRatio,
+          renderedAt: new Date().toISOString(),
+        },
+      }).catch(() => {});
+    }
+  }
+
+  function setVoice(voiceId: string) {
+    const v = voices.find((x) => x.id === voiceId);
+    useBoardStore.getState().updateNodeData(rfId, {
+      voiceId: voiceId || undefined,
+      voiceGender: v?.gender,
+      voiceLanguage: "vi-VN",
+    });
+    const dbId = parseInt(rfId, 10);
+    if (!isNaN(dbId)) {
+      patchNode(dbId, {
+        data: {
+          voiceId: voiceId || null,
+          voiceGender: v?.gender || null,
+        },
+      }).catch(() => {});
+    }
+  }
+
+  function playSample(voice: FlowVoice) {
+    if ("speechSynthesis" in window) {
+      window.speechSynthesis.cancel();
+      if (playingVoice === voice.id) {
+        setPlayingVoice(null);
+        return;
+      }
+      const utter = new SpeechSynthesisUtterance(voice.sample_text);
+      utter.rate = 1.0;
+      utter.pitch = voice.gender === "female" ? 1.15 : 0.85;
+      utter.onend = () => setPlayingVoice(null);
+      utter.onerror = () => setPlayingVoice(null);
+      setPlayingVoice(voice.id);
+      window.speechSynthesis.speak(utter);
+    }
+  }
+
+  async function uploadHead(file: File) {
     setError(null);
-    setUploading(true);
+    setUploadingHead(true);
     try {
       const projectId = await useGenerationStore.getState().ensureProjectId();
       if (!projectId) {
@@ -112,144 +181,271 @@ function CharacterBody({ rfId, data }: { rfId: string; data: FlowboardNodeData }
       }
       const dbId = parseInt(rfId, 10);
       const resp = await uploadImage(file, projectId, isNaN(dbId) ? undefined : dbId);
-      persistMedia(resp.media_id, resp.aspect_ratio);
+      persistPortrait(resp.media_id, resp.aspect_ratio);
     } catch (err) {
       setError(err instanceof Error ? err.message : "upload failed");
     } finally {
-      setUploading(false);
+      setUploadingHead(false);
     }
   }
 
-  function onPick() {
-    fileInputRef.current?.click();
+  async function uploadBody(file: File) {
+    setError(null);
+    setUploadingBody(true);
+    try {
+      const projectId = await useGenerationStore.getState().ensureProjectId();
+      if (!projectId) {
+        setError("no project");
+        return;
+      }
+      const dbId = parseInt(rfId, 10);
+      const resp = await uploadImage(file, projectId, isNaN(dbId) ? undefined : dbId);
+      persistTurnaround(resp.media_id, resp.aspect_ratio);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "upload failed");
+    } finally {
+      setUploadingBody(false);
+    }
   }
 
-  function onChange(e: React.ChangeEvent<HTMLInputElement>) {
-    const f = e.target.files?.[0];
-    if (f) uploadOwn(f);
-    e.target.value = "";
+  async function autoGenerateTurnaround() {
+    setGeneratingTurnaround(true);
+    setError(null);
+    try {
+      const res = await getTurnaroundPrompt({
+        title: data.title,
+        gender: data.charGender as string,
+        vibe: data.charVibe as string,
+        country: data.charCountry as string,
+      });
+      useGenerationStore.getState().openGenerationDialog(rfId, res.prompt);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Turnaround prompt failed");
+    } finally {
+      setGeneratingTurnaround(false);
+    }
   }
 
-  function onDrop(e: React.DragEvent) {
-    e.preventDefault();
-    e.stopPropagation();
-    setDragOver(false);
-    const f = e.dataTransfer.files?.[0];
-    if (f) uploadOwn(f);
-  }
-
-  function onDragOver(e: React.DragEvent) {
-    e.preventDefault();
-    e.stopPropagation();
-    if (!dragOver) setDragOver(true);
-  }
-
-  function onDragLeave(e: React.DragEvent) {
-    e.preventDefault();
-    e.stopPropagation();
-    setDragOver(false);
-  }
-
-  function openGenerate() {
+  function openGenerateHead() {
     useGenerationStore.getState().openGenerationDialog(rfId, data.prompt ?? "");
   }
 
-  // Filled state — show the avatar circle. Drag-drop on the avatar replaces it.
-  if (mediaId) {
-    return (
-      <div
-        className="node-body node-body--character"
-        onDrop={onDrop}
-        onDragOver={onDragOver}
-        onDragLeave={onDragLeave}
-      >
+  const selectedVoice = voices.find((v) => v.id === currentVoiceId);
+
+  return (
+    <div className="node-body node-body--character">
+      {/* ── Dual-Asset Grid: Headshot + 3-Angle Turnaround ── */}
+      <div className="character-dual-grid">
+        {/* Slot 1: Headshot */}
         <div
-          className={`character-avatar${dragOver ? " character-avatar--over" : ""}${uploading ? " character-avatar--uploading" : ""}`}
-          onClick={onPick}
-          role="button"
-          aria-label="Replace character image"
-          tabIndex={0}
+          className={`character-slot ${dragOverHead ? "character-slot--over" : ""}`}
+          onDrop={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            setDragOverHead(false);
+            const f = e.dataTransfer.files?.[0];
+            if (f) uploadHead(f);
+          }}
+          onDragOver={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            if (!dragOverHead) setDragOverHead(true);
+          }}
+          onDragLeave={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            setDragOverHead(false);
+          }}
         >
-          <img
-            className="character-avatar__img"
-            src={mediaUrl(mediaId)}
-            alt={data.title}
+          <div className="character-slot__header">
+            <span className="character-slot__label">◎ Chân dung (Mặt)</span>
+          </div>
+          {portraitMediaId ? (
+            <div
+              className="character-slot__preview"
+              onClick={() => headInputRef.current?.click()}
+              title="Nhấp để thay ảnh chân dung"
+            >
+              <img
+                className="character-slot__img"
+                src={mediaUrl(portraitMediaId)}
+                alt="Chân dung"
+              />
+              {uploadingHead && <span className="character-drop__overlay">…</span>}
+            </div>
+          ) : (
+            <div className="character-slot__empty">
+              {isProcessing ? (
+                <span className="visual-asset__hint">Generating…</span>
+              ) : (
+                <div className="character-slot__actions">
+                  <button
+                    type="button"
+                    className="visual-asset__action"
+                    onClick={() => headInputRef.current?.click()}
+                    disabled={uploadingHead}
+                  >
+                    {uploadingHead ? "…" : "Upload"}
+                  </button>
+                  <button
+                    type="button"
+                    className="visual-asset__action"
+                    onClick={openGenerateHead}
+                    disabled={uploadingHead}
+                  >
+                    Generate
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+          <input
+            ref={headInputRef}
+            type="file"
+            accept={ACCEPT_MIME}
+            style={{ display: "none" }}
+            onChange={(e) => {
+              const f = e.target.files?.[0];
+              if (f) uploadHead(f);
+              e.target.value = "";
+            }}
           />
-          {uploading && <span className="character-drop__overlay">…</span>}
         </div>
-        <BriefHint data={data} />
+
+        {/* Slot 2: 3-Angle Turnaround Sheet */}
+        <div
+          className={`character-slot ${dragOverBody ? "character-slot--over" : ""}`}
+          onDrop={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            setDragOverBody(false);
+            const f = e.dataTransfer.files?.[0];
+            if (f) uploadBody(f);
+          }}
+          onDragOver={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            if (!dragOverBody) setDragOverBody(true);
+          }}
+          onDragLeave={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            setDragOverBody(false);
+          }}
+        >
+          <div className="character-slot__header">
+            <span className="character-slot__label">▣ Toàn thân (3 góc)</span>
+          </div>
+          {turnaroundMediaId ? (
+            <div
+              className="character-slot__preview"
+              onClick={() => bodyInputRef.current?.click()}
+              title="Nhấp để thay ảnh 3 góc"
+            >
+              <img
+                className="character-slot__img character-slot__img--turnaround"
+                src={mediaUrl(turnaroundMediaId)}
+                alt="Toàn thân 3 góc"
+              />
+              {uploadingBody && <span className="character-drop__overlay">…</span>}
+            </div>
+          ) : (
+            <div className="character-slot__empty">
+              <div className="character-slot__actions">
+                <button
+                  type="button"
+                  className="visual-asset__action"
+                  onClick={() => bodyInputRef.current?.click()}
+                  disabled={uploadingBody}
+                >
+                  {uploadingBody ? "…" : "Upload"}
+                </button>
+                <button
+                  type="button"
+                  className="visual-asset__action visual-asset__action--synth"
+                  onClick={autoGenerateTurnaround}
+                  disabled={generatingTurnaround || uploadingBody}
+                  title="Sinh ảnh toàn thân 3 góc từ ảnh chân dung"
+                >
+                  {generatingTurnaround ? "…" : "✨ Sinh 3 góc"}
+                </button>
+              </div>
+            </div>
+          )}
+          <input
+            ref={bodyInputRef}
+            type="file"
+            accept={ACCEPT_MIME}
+            style={{ display: "none" }}
+            onChange={(e) => {
+              const f = e.target.files?.[0];
+              if (f) uploadBody(f);
+              e.target.value = "";
+            }}
+          />
+        </div>
+      </div>
+
+      {/* ── Google Flow Voice Selector ── */}
+      <div className="character-voice-box">
+        <div className="character-voice-header">
+          <span className="character-voice-title">🎙️ Giọng nói (Voice):</span>
+          {selectedVoice && (
+            <button
+              type="button"
+              className={`character-voice-preview-btn ${playingVoice === selectedVoice.id ? "character-voice-preview-btn--active" : ""}`}
+              onClick={() => playSample(selectedVoice)}
+              title="Nghe thử mẫu giọng"
+              aria-label="Play voice sample"
+            >
+              {playingVoice === selectedVoice.id ? "⏸️ Đang phát" : "▶️ Nghe thử"}
+            </button>
+          )}
+        </div>
+        <select
+          className="character-voice-select"
+          value={currentVoiceId}
+          onChange={(e) => setVoice(e.target.value)}
+          aria-label="Chọn giọng cho nhân vật"
+        >
+          <option value="">-- Mặc định (Tự động) --</option>
+          {voices.map((v) => (
+            <option key={v.id} value={v.id}>
+              {v.gender === "female" ? "♀" : "♂"} {v.name} ({v.vibe})
+            </option>
+          ))}
+        </select>
+        {selectedVoice && (
+          <p className="character-voice-desc">{selectedVoice.description}</p>
+        )}
+      </div>
+
+      <BriefHint data={data} />
+
+      {portraitMediaId && (
         <button
           type="button"
           className="visual-asset__action"
           onClick={(e) => {
             e.stopPropagation();
             saveTileToLibrary({
-              mediaId,
+              mediaId: portraitMediaId,
               nodeType: data.type,
-              data,
+              data: {
+                ...data,
+                portraitMediaId,
+                turnaroundMediaId,
+                voiceId: currentVoiceId,
+              },
             });
           }}
-          title="Save this character to the library"
+          title="Lưu nhân vật vào thư viện tham chiếu"
           aria-label="Save to library"
         >
-          ★ Save
+          ★ Lưu nhân vật vào Library
         </button>
-        <input
-          ref={fileInputRef}
-          type="file"
-          accept={ACCEPT_MIME}
-          style={{ display: "none" }}
-          onChange={onChange}
-        />
-        {error && <p className="character-drop__error" role="alert">{error}</p>}
-      </div>
-    );
-  }
+      )}
 
-  // Empty state — compact action row (no oversized placeholder), but the
-  // whole body still accepts drag-drop.
-  return (
-    <div
-      className="node-body node-body--character"
-      onDrop={onDrop}
-      onDragOver={onDragOver}
-      onDragLeave={onDragLeave}
-    >
-      <div
-        className={`character-empty${dragOver ? " character-empty--over" : ""}${isProcessing ? " character-empty--processing" : ""}`}
-      >
-        {isProcessing ? (
-          <span className="visual-asset__hint">Generating…</span>
-        ) : dragOver ? (
-          <span className="visual-asset__hint">Drop image</span>
-        ) : (
-          <>
-            <button
-              type="button"
-              className="visual-asset__action"
-              onClick={onPick}
-              disabled={uploading}
-            >
-              {uploading ? "Uploading…" : "Upload"}
-            </button>
-            <button
-              type="button"
-              className="visual-asset__action"
-              onClick={openGenerate}
-              disabled={uploading}
-            >
-              Generate
-            </button>
-          </>
-        )}
-      </div>
-      <input
-        ref={fileInputRef}
-        type="file"
-        accept={ACCEPT_MIME}
-        style={{ display: "none" }}
-        onChange={onChange}
-      />
       {error && <p className="character-drop__error" role="alert">{error}</p>}
     </div>
   );

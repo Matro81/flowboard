@@ -145,29 +145,16 @@ _SYNTH_VIDEO_CORE = (
     "fits — don't default to either.\n\n"
     "ALWAYS include: natural blinks throughout, soft fabric and hair "
     "drift. These ground the clip without adding theatrical motion.\n\n"
-    "AUDIO — Veo generates sound, and that audio passes a content "
-    "filter (`PUBLIC_MIRROR_AUDIO_FILTER`) that REJECTS the entire "
-    "request when speech is generated over faces resembling real "
-    "people. Most Flowboard scenes are portraits, so steer the audio "
-    "bed away from speech but DO include a gentle musical/ambient bed "
-    "by default — pure silence reads sterile:\n"
-    "  • NO SPEECH: no spoken dialogue, no voice-over, no lip-sync, "
-    "no singing, no humming, no whispering. Mouths stay neutral "
-    "closed-mouth.\n"
+    "AUDIO & SPEECH — Veo generates sound (`PUBLIC_MIRROR_AUDIO_FILTER`). Direct audio according to scene context:\n"
+    "  • DIALOGUE & SPEECH: When the scene has spoken dialogue, character voice, "
+    "or voiceover, direct natural lip movement synchronized with speech delivery, "
+    "expressive micro-gestures, and clear spoken tone.\n"
+    "  • NO SPEECH (default when no dialogue requested): no spoken dialogue, "
+    "no voice-over, no singing, no lip-sync.\n"
     "  • BACKGROUND MUSIC (default ON): a soft, gentle musical bed at "
-    "low volume — lo-fi, ambient pad, mellow piano, soft acoustic "
-    "guitar, light strings, calm cinematic underscore. Pick a mood "
-    "that fits the scene (cozy / romantic / contemplative / serene). "
-    "Keep it instrumental — no lyrics, no recognisable melody, no "
-    "high-energy drops.\n"
-    "  • SFX (light layer over the music): subtle diegetic ambient "
-    "cues that match the setting (room tone, fabric rustle, light "
-    "footsteps, soft breeze, distant city hum). Keep them quiet — "
-    "they sit under the music, not on top.\n"
-    "  • EXCEPTION: only when the user prompt EXPLICITLY asks for "
-    "dialogue or singing should the clip include speech, and even "
-    "then keep the audio direction generic (no specific accent / "
-    "voice characteristic / impersonation) to keep filter risk low.\n\n"
+    "low volume — lo-fi, ambient pad, mellow piano, soft acoustic guitar, light strings. "
+    "Keep it instrumental.\n"
+    "  • SFX: subtle diegetic ambient cues that match the setting (room tone, fabric rustle, light footsteps, soft breeze).\n\n"
     "No scene cuts, no text overlays. Max 400 chars. Output the "
     "motion prompt only — no preamble."
 )
@@ -618,3 +605,24 @@ async def auto_prompt(node_id: int, *, camera: Optional[str] = None) -> str:
             text = text[:500].rstrip() + "…"
         activity.set_result({"prompt": text})
         return text
+
+
+def synth_turnaround_prompt(
+    title: str = "Character",
+    *,
+    gender: Optional[str] = None,
+    vibe: Optional[str] = None,
+    country: Optional[str] = None,
+) -> str:
+    """Generate a clean Google Flow full-body 3-camera turnaround prompt."""
+    gender_desc = f"{gender} model" if gender else "character model"
+    country_desc = f"{country} " if country else ""
+    vibe_desc = f", {vibe} aesthetic" if vibe else ""
+    return (
+        f"Full-body character design turnaround sheet for {country_desc}{gender_desc}{vibe_desc}, "
+        "arranged horizontally in 3 distinct camera angles: "
+        "1) Front view (standing, head to toe), 2) 45-degree three-quarter side view, 3) Full back view. "
+        "Strict facial likeness matching portrait, identical hairstyle, matching wardrobe styling and body proportions across all views. "
+        "High-end lookbook studio lighting, clean solid neutral grey backdrop, 8k resolution, character consistency model sheet."
+    )
+

@@ -432,13 +432,21 @@ async def run_pipeline(
         upstream_nodes = [node_by_id[u] for u in upstream_node_ids if u in node_by_id]
 
         if node.type == "image":
-            ref_media_ids = [
-                (u.data or {}).get("mediaId")
-                for u in upstream_nodes
-                if u.type in ("character", "image", "visual_asset")
-                and isinstance((u.data or {}).get("mediaId"), str)
-            ]
-            ref_media_ids = [m for m in ref_media_ids if m]
+            ref_media_ids: list[str] = []
+            for u in upstream_nodes:
+                udata = u.data or {}
+                if u.type == "character":
+                    h = udata.get("portraitMediaId") or udata.get("mediaId")
+                    t = udata.get("turnaroundMediaId")
+                    if isinstance(h, str) and h and h not in ref_media_ids:
+                        ref_media_ids.append(h)
+                    if isinstance(t, str) and t and t not in ref_media_ids:
+                        ref_media_ids.append(t)
+                elif u.type in ("image", "visual_asset"):
+                    m = udata.get("mediaId")
+                    if isinstance(m, str) and m and m not in ref_media_ids:
+                        ref_media_ids.append(m)
+
             params = {
                 "prompt": prompt.strip(),
                 "project_id": project_id,
@@ -448,12 +456,27 @@ async def run_pipeline(
             req_type = "gen_image"
         else:  # video
             start_media_id = None
+            voice_id = None
+            char_refs: list[str] = []
             for u in upstream_nodes:
+                udata = u.data or {}
                 if u.type == "image":
-                    mid = (u.data or {}).get("mediaId")
-                    if isinstance(mid, str) and mid:
+                    mid = udata.get("mediaId")
+                    if isinstance(mid, str) and mid and not start_media_id:
                         start_media_id = mid
-                        break
+                elif u.type == "character":
+                    if not voice_id and isinstance(udata.get("voiceId"), str):
+                        voice_id = udata.get("voiceId")
+                    h = udata.get("portraitMediaId") or udata.get("mediaId")
+                    t = udata.get("turnaroundMediaId")
+                    if isinstance(h, str) and h and h not in char_refs:
+                        char_refs.append(h)
+                    if isinstance(t, str) and t and t not in char_refs:
+                        char_refs.append(t)
+
+            if not start_media_id and char_refs:
+                start_media_id = char_refs[0]
+
             if not start_media_id:
                 failed_nodes.add(nid)
                 _stamp_node_status(nid, "error", error="missing_upstream_image")
@@ -463,6 +486,10 @@ async def run_pipeline(
                 "project_id": project_id,
                 "start_media_id": start_media_id,
             }
+            if voice_id:
+                params["voice_id"] = voice_id
+            if char_refs:
+                params["ref_media_ids"] = char_refs
             req_type = "gen_video"
 
         # Stamp running, dispatch.
