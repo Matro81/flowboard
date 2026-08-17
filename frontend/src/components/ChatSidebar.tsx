@@ -358,6 +358,8 @@ export function ChatSidebar() {
     }
   }, [boardId, loadChat]);
 
+  const toggleOpen = useChatStore((s) => s.toggleOpen);
+
   // Autoscroll to bottom when messages change or pending changes
   useEffect(() => {
     const el = scrollRef.current;
@@ -368,13 +370,24 @@ export function ChatSidebar() {
   return (
     <aside className="sidebar chat">
       <header className="chat__header">
-        <span className="chat__label">CHAT</span>
-        {boardName && (
-          <>
-            <span className="chat__scope-sep">&nbsp;·&nbsp;</span>
-            <span className="chat__scope">{boardName}</span>
-          </>
-        )}
+        <div style={{ display: "flex", alignItems: "center", minWidth: 0, flex: 1 }}>
+          <span className="chat__label">PLANNER</span>
+          {boardName && (
+            <>
+              <span className="chat__scope-sep">&nbsp;·&nbsp;</span>
+              <span className="chat__scope">{boardName}</span>
+            </>
+          )}
+        </div>
+        <button
+          type="button"
+          className="chat__close-btn"
+          onClick={toggleOpen}
+          aria-label="Close Chat"
+          title="Close Planner"
+        >
+          ✕
+        </button>
       </header>
 
       <div className="chat__messages" ref={scrollRef}>

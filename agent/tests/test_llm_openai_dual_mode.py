@@ -287,11 +287,11 @@ async def test_run_text_via_cli_when_codex_available(
     assert len(dispatch_calls) == 1
     argv, kwargs = dispatch_calls[0]
     assert "exec" in argv
-    assert "-p" in argv and "-" in argv
+    assert "--json" in argv
+    assert "-" in argv
     # Prompt is on stdin, not in argv.
-    assert kwargs["input"] == b"hi"
+    assert b"hi" in kwargs["input"]
     assert "hi" not in argv
-    assert "--system" in argv
 
 
 @pytest.mark.asyncio

@@ -47,12 +47,14 @@ button:disabled {
 
 .app {
   display: grid;
-  /* Project sidebar (auto-sized; toggles 220 ↔ 44) | canvas
-     Chat sidebar disabled — restore by adding `320px` back here and
-     un-commenting the ChatSidebar import in App.tsx. */
   grid-template-columns: auto 1fr;
   height: 100vh;
   width: 100vw;
+  transition: grid-template-columns 160ms ease;
+}
+
+.app--with-chat {
+  grid-template-columns: auto 1fr 340px;
 }
 
 /* ── Project sidebar (left) ─────────────────────────────────────────────── */
@@ -418,17 +420,19 @@ button:disabled {
 
 .statusbar {
   position: absolute;
-  top: 60px;
-  left: 12px;
+  bottom: 16px;
+  left: 16px;
   z-index: 10;
   display: flex;
   align-items: center;
   background: var(--panel);
   border: 1px solid var(--border);
   border-radius: 8px;
-  padding: 6px 10px;
+  padding: 6px 12px;
   font-size: 12px;
   color: var(--muted);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35);
+  backdrop-filter: blur(8px);
 }
 
 /* ── Account panel (pinned bottom of project sidebar) ───────────────────── */
@@ -1127,8 +1131,36 @@ button:disabled {
 .toolbar-actions {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 10px;
   margin-left: auto;
+}
+
+.toolbar-chat-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--panel-high);
+  border: 1px solid var(--border);
+  border-radius: 9999px;
+  padding: 5px 12px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--muted);
+  cursor: pointer;
+  transition: all 120ms ease;
+}
+
+.toolbar-chat-btn:hover {
+  color: var(--text);
+  border-color: var(--border-high);
+  background: var(--panel-higher);
+}
+
+.toolbar-chat-btn--active {
+  background: color-mix(in srgb, var(--accent) 22%, var(--panel-high));
+  border-color: var(--accent);
+  color: #fff;
+  box-shadow: 0 0 10px rgba(124, 92, 255, 0.25);
 }
 
 .toolbar-icon-btn {
@@ -2761,8 +2793,29 @@ button:disabled {
   display: flex;
   flex-direction: column;
   min-height: 0;
+  width: 340px;
+  background: var(--panel);
+  border-left: 1px solid var(--border);
   padding: 0;
   overflow: hidden;
+  z-index: 15;
+}
+
+.chat__close-btn {
+  background: none;
+  border: none;
+  color: var(--muted);
+  font-size: 13px;
+  cursor: pointer;
+  padding: 4px 6px;
+  border-radius: 4px;
+  transition: all 80ms ease;
+  line-height: 1;
+}
+
+.chat__close-btn:hover {
+  color: var(--text);
+  background: var(--panel-high);
 }
 
 .chat__header {
@@ -5700,5 +5753,44 @@ button:disabled {
 }
 .references-panel__toggle-tab:hover {
   animation: none;
+}
+
+/* ── React Flow MiniMap & Controls Dark Mode ────────────────────────────── */
+
+.react-flow__minimap {
+  background: var(--panel, #12141a) !important;
+  border: 1px solid var(--border, #2a2e38) !important;
+  border-radius: 10px !important;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.45) !important;
+  overflow: hidden;
+}
+
+.react-flow__minimap-node {
+  fill: var(--border-high, #3d4352) !important;
+  stroke: none !important;
+}
+
+.react-flow__minimap-mask {
+  fill: rgba(0, 0, 0, 0.6) !important;
+}
+
+.react-flow__controls {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3) !important;
+  border-radius: 8px !important;
+  overflow: hidden !important;
+  border: 1px solid var(--border) !important;
+}
+
+.react-flow__controls-button {
+  background: var(--panel) !important;
+  border-bottom: 1px solid var(--border) !important;
+  fill: var(--muted) !important;
+  color: var(--muted) !important;
+}
+
+.react-flow__controls-button:hover {
+  background: var(--panel-high) !important;
+  fill: var(--text) !important;
+  color: var(--text) !important;
 }
 

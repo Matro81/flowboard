@@ -24,6 +24,7 @@ class ChatSendRequest(BaseModel):
 
 @router.post("/api/chat")
 async def send_chat(body: ChatSendRequest):
+    # Step 1: Verify board and persist user message
     with get_session() as s:
         if not s.get(Board, body.board_id):
             raise HTTPException(404, "board not found")
@@ -35,14 +36,17 @@ async def send_chat(body: ChatSendRequest):
             mentions=list(body.mentions),
         )
         s.add(user_msg)
+        s.commit()
+        s.refresh(user_msg)
 
-        # Planner can read the session (for mentions lookup). We haven't
-        # committed yet, so the user row isn't visible to other connections —
-        # that's fine, the planner only reads Node rows via the same session.
+    # Step 2: Generate planner reply
+    with get_session() as s:
         planner_out = await generate_plan_reply(
             s, body.board_id, body.message, list(body.mentions)
         )
 
+    # Step 3: Persist assistant message and optional plan
+    with get_session() as s:
         assistant_msg = ChatMessage(
             board_id=body.board_id,
             role="assistant",
@@ -60,10 +64,7 @@ async def send_chat(body: ChatSendRequest):
             )
             s.add(plan_row)
 
-        # Single commit: both messages (and optional plan) land together so
-        # neither row gets expired before we serialize it.
         s.commit()
-        s.refresh(user_msg)
         s.refresh(assistant_msg)
         if plan_row is not None:
             s.refresh(plan_row)

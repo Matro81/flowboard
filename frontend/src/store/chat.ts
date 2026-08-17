@@ -18,6 +18,9 @@ interface ChatState {
   pending: boolean;
   error: string | null;
 
+  isOpen: boolean;
+  toggleOpen: () => void;
+  setOpen: (open: boolean) => void;
   loadChat(boardId: number): Promise<void>;
   sendMessage(message: string, mentions: string[]): Promise<void>;
   clearError(): void;
@@ -34,6 +37,15 @@ export const useChatStore = create<ChatState>((set, get) => ({
   loading: false,
   pending: false,
   error: null,
+  isOpen: false,
+
+  toggleOpen() {
+    set((s) => ({ isOpen: !s.isOpen }));
+  },
+
+  setOpen(open: boolean) {
+    set({ isOpen: open });
+  },
 
   async loadChat(boardId: number) {
     set({ boardId, loading: true, error: null });

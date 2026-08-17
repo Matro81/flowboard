@@ -46,13 +46,18 @@ def list_providers() -> list[LLMProvider]:
     return list(_PROVIDERS.values())
 
 
+import os
+
+DEFAULT_LLM_TIMEOUT = float(os.environ.get("FLOWBOARD_LLM_TIMEOUT", "180.0"))
+
+
 async def run_llm(
     feature: Feature,
     user_prompt: str,
     *,
     system_prompt: Optional[str] = None,
     attachments: Optional[list[str]] = None,
-    timeout: float = 90.0,
+    timeout: float = DEFAULT_LLM_TIMEOUT,
 ) -> str:
     """Feature-routed LLM dispatch.
 

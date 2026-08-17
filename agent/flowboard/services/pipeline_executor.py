@@ -200,18 +200,28 @@ def materialize_plan(session, plan_id: int) -> dict:
         params = spec_node.get("params") or {}
         if not isinstance(params, dict):
             params = {}
+        title_candidate = params.get("title") or (params.get("name") if node_type == "character" else None)
         title = (
-            params.get("title")
-            if isinstance(params.get("title"), str)
+            title_candidate.strip()
+            if isinstance(title_candidate, str) and title_candidate.strip()
             else node_type.title()
         )
-        prompt = params.get("prompt") if isinstance(params.get("prompt"), str) else None
+        prompt_candidate = (
+            params.get("prompt")
+            or params.get("text")
+            or params.get("description")
+            or params.get("content")
+            or (params.get("name") if node_type != "character" else None)
+        )
+        prompt = prompt_candidate.strip() if isinstance(prompt_candidate, str) else None
 
         x, y = layout.get(tmp_id, (ORIGIN_X, ORIGIN_Y))
         short_id = generate_unique_short_id(session, board_id)
         data: dict[str, Any] = {"title": title}
         if prompt:
             data["prompt"] = prompt
+            if node_type == "note":
+                data["text"] = prompt
         node = Node(
             board_id=board_id,
             short_id=short_id,
@@ -226,6 +236,26 @@ def materialize_plan(session, plan_id: int) -> dict:
         assert node.id is not None
         tmp_to_node_id[tmp_id] = node.id
         created_node_ids.append(node.id)
+
+    # Second pass: resolve cross-node prompt references (e.g. if an image prompt is set to "hero_prompt" tmp_id)
+    tmp_to_text: dict[str, str] = {}
+    for spec_node in spec_nodes:
+        if isinstance(spec_node, dict):
+            tid = spec_node.get("tmp_id")
+            p = spec_node.get("params")
+            if isinstance(p, dict) and tid:
+                txt = p.get("prompt") or p.get("text") or p.get("description")
+                if isinstance(txt, str) and txt.strip():
+                    tmp_to_text[tid] = txt.strip()
+
+    for nid in created_node_ids:
+        n = session.get(Node, nid)
+        if n is not None and isinstance(n.data, dict):
+            cur_prompt = n.data.get("prompt")
+            if cur_prompt in tmp_to_text and cur_prompt != tmp_to_text[cur_prompt]:
+                n.data = {**n.data, "prompt": tmp_to_text[cur_prompt]}
+                session.add(n)
+                session.flush()
 
     # Edges. Endpoints resolve via tmp_to_node_id first, then existing short_ids.
     created_edge_ids: list[int] = []
@@ -390,7 +420,7 @@ async def run_pipeline(
             continue
 
         # Resolve project_id from board → BoardFlowProject.
-        project_id = _project_id_for_board(board_id)
+        project_id = await _project_id_for_board(board_id)
         if project_id is None:
             failed_nodes.add(nid)
             _stamp_node_status(nid, "error", error="no_project")
@@ -519,12 +549,39 @@ def _topo_sort(node_ids: Iterable[int], incoming: dict[int, list[int]]) -> list[
     return out
 
 
-def _project_id_for_board(board_id: int) -> Optional[str]:
-    from flowboard.db.models import BoardFlowProject  # local import to avoid cycle
+async def _project_id_for_board(board_id: int) -> Optional[str]:
+    from flowboard.db.models import Board, BoardFlowProject  # local import to avoid cycle
+    from flowboard.services.flow_sdk import get_flow_sdk
 
     with get_session() as s:
         row = s.get(BoardFlowProject, board_id)
-        return row.flow_project_id if row is not None else None
+        if row is not None:
+            return row.flow_project_id
+        board = s.get(Board, board_id)
+        board_name = board.name if board else "Untitled"
+
+    # Auto-bootstrap project on Flow if not yet linked to this board
+    try:
+        sdk = get_flow_sdk()
+        resp = await sdk.create_project(title=board_name or "Untitled")
+        flow_project_id = resp.get("project_id")
+        if isinstance(flow_project_id, str) and flow_project_id:
+            with get_session() as s:
+                existing = s.get(BoardFlowProject, board_id)
+                if existing is None:
+                    s.add(
+                        BoardFlowProject(
+                            board_id=board_id, flow_project_id=flow_project_id
+                        )
+                    )
+                    s.commit()
+            return flow_project_id
+    except Exception:
+        logger.exception(
+            "pipeline_executor: failed to auto-create project for board %s",
+            board_id,
+        )
+    return None
 
 
 def _stamp_node_status(

@@ -4,7 +4,7 @@ import { Board } from "./canvas/Board";
 import { AddNodePalette } from "./canvas/AddNodePalette";
 import { StatusBar } from "./components/StatusBar";
 import { Toolbar } from "./components/Toolbar";
-// import { ChatSidebar } from "./components/ChatSidebar";
+import { ChatSidebar } from "./components/ChatSidebar";
 import { ProjectSidebar } from "./components/ProjectSidebar";
 import { ReferencesPanel } from "./components/ReferencesPanel";
 import { Toaster } from "./components/Toaster";
@@ -13,12 +13,14 @@ import { ResultViewer } from "./components/ResultViewer";
 import { ForcedSetupGate } from "./components/ForcedSetupGate";
 import { useBoardStore } from "./store/board";
 import { useReferencesStore } from "./store/references";
+import { useChatStore } from "./store/chat";
 
 export function App() {
   const loadInitialBoard = useBoardStore((s) => s.loadInitialBoard);
   const loadReferences = useReferencesStore((s) => s.load);
   const loading = useBoardStore((s) => s.loading);
   const boardId = useBoardStore((s) => s.boardId);
+  const chatOpen = useChatStore((s) => s.isOpen);
   const ran = useRef(false);
 
   useEffect(() => {
@@ -31,7 +33,7 @@ export function App() {
   }, [loadInitialBoard, loadReferences]);
 
   return (
-    <div className="app">
+    <div className={`app ${chatOpen ? "app--with-chat" : ""}`}>
       <ProjectSidebar />
       <ReactFlowProvider>
         <div className="canvas-wrap">
@@ -48,7 +50,7 @@ export function App() {
           <ReferencesPanel />
         </div>
       </ReactFlowProvider>
-      {/* <ChatSidebar /> */}
+      {chatOpen && <ChatSidebar />}
       <Toaster />
       <GenerationDialog />
       <ResultViewer />

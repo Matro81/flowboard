@@ -4,9 +4,13 @@ import { ActivityBell } from "./activity/ActivityBell";
 import { AiProviderBadge } from "./AiProviderBadge";
 import { SponsorButton } from "./SponsorDialog";
 
+import { useChatStore } from "../store/chat";
+
 export function Toolbar() {
   const boardName = useBoardStore((s) => s.boardName);
   const renameBoard = useBoardStore((s) => s.renameBoard);
+  const chatOpen = useChatStore((s) => s.isOpen);
+  const toggleChat = useChatStore((s) => s.toggleOpen);
 
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState("");
@@ -59,6 +63,15 @@ export function Toolbar() {
       )}
 
       <div className="toolbar-actions">
+        <button
+          type="button"
+          className={`toolbar-chat-btn ${chatOpen ? "toolbar-chat-btn--active" : ""}`}
+          onClick={toggleChat}
+          title={chatOpen ? "Close AI Planner Chat" : "Open AI Planner Chat"}
+          aria-label="Toggle AI Planner Chat"
+        >
+          💬 Planner
+        </button>
         <ActivityBell />
         <AiProviderBadge />
         <SponsorButton />
