@@ -85,7 +85,6 @@ function CharacterBody({ rfId, data }: { rfId: string; data: FlowboardNodeData }
   const [dragOverHead, setDragOverHead] = useState(false);
   const [dragOverBody, setDragOverBody] = useState(false);
   const [voices, setVoices] = useState<FlowVoice[]>([]);
-  const [playingVoice, setPlayingVoice] = useState<string | null>(null);
 
   const headInputRef = useRef<HTMLInputElement>(null);
   const bodyInputRef = useRef<HTMLInputElement>(null);
@@ -151,72 +150,6 @@ function CharacterBody({ rfId, data }: { rfId: string; data: FlowboardNodeData }
         },
       }).catch(() => {});
     }
-  }
-
-  function playSample(voice: FlowVoice) {
-    if (!("speechSynthesis" in window)) return;
-    window.speechSynthesis.cancel();
-    if (playingVoice === voice.id) {
-      setPlayingVoice(null);
-      return;
-    }
-    const allVoices = window.speechSynthesis.getVoices();
-    const viVoice = allVoices.find((v) => v.lang.toLowerCase().startsWith("vi"));
-
-    const hasVi = !!viVoice;
-    const text = hasVi ? voice.sample_text : voice.sample_text_en || `Hello, I am ${voice.name}. My voice is ${voice.vibe}.`;
-
-    const utter = new SpeechSynthesisUtterance(text);
-    if (hasVi && viVoice) {
-      utter.voice = viVoice;
-      utter.lang = "vi-VN";
-    } else {
-      const isFemale = voice.gender === "female";
-      const matchedVoice =
-        allVoices.find(
-          (v) =>
-            v.lang.toLowerCase().startsWith("en") &&
-            (isFemale
-              ? /female|zira|samantha|karen|victoria|jenny/i.test(v.name)
-              : /male|david|george|alex|guy/i.test(v.name)),
-        ) ||
-        allVoices.find((v) => v.lang.toLowerCase().startsWith("en")) ||
-        allVoices[0];
-      if (matchedVoice) utter.voice = matchedVoice;
-      utter.lang = matchedVoice?.lang || "en-US";
-    }
-
-    // Modulate pitch and rate per character voice profile so each sounds distinct
-    if (voice.id === "Aoede") {
-      utter.pitch = 1.15;
-      utter.rate = 0.95;
-    } else if (voice.id === "Kore") {
-      utter.pitch = 1.3;
-      utter.rate = 0.88;
-    } else if (voice.id === "Leda") {
-      utter.pitch = 1.0;
-      utter.rate = 1.05;
-    } else if (voice.id === "Zephyr") {
-      utter.pitch = 1.22;
-      utter.rate = 1.12;
-    } else if (voice.id === "Puck") {
-      utter.pitch = 1.18;
-      utter.rate = 1.1;
-    } else if (voice.id === "Charon") {
-      utter.pitch = 0.65;
-      utter.rate = 0.88;
-    } else if (voice.id === "Fenrir") {
-      utter.pitch = 0.8;
-      utter.rate = 0.95;
-    } else if (voice.id === "Orpheus") {
-      utter.pitch = 0.92;
-      utter.rate = 0.92;
-    }
-
-    utter.onend = () => setPlayingVoice(null);
-    utter.onerror = () => setPlayingVoice(null);
-    setPlayingVoice(voice.id);
-    window.speechSynthesis.speak(utter);
   }
 
   async function uploadHead(file: File) {
@@ -442,18 +375,7 @@ function CharacterBody({ rfId, data }: { rfId: string; data: FlowboardNodeData }
       {/* ── Google Flow Voice Selector ── */}
       <div className="character-voice-box">
         <div className="character-voice-header">
-          <span className="character-voice-title">🎙️ Giọng nói (Voice):</span>
-          {selectedVoice && (
-            <button
-              type="button"
-              className={`character-voice-preview-btn ${playingVoice === selectedVoice.id ? "character-voice-preview-btn--active" : ""}`}
-              onClick={() => playSample(selectedVoice)}
-              title="Nghe thử mẫu giọng"
-              aria-label="Play voice sample"
-            >
-              {playingVoice === selectedVoice.id ? "⏸️ Đang phát" : "▶️ Nghe thử"}
-            </button>
-          )}
+          <span className="character-voice-title">🎙️ Giọng nhân vật (Google Flow Voice):</span>
         </div>
         <select
           className="character-voice-select"
@@ -464,7 +386,7 @@ function CharacterBody({ rfId, data }: { rfId: string; data: FlowboardNodeData }
           <option value="">-- Mặc định (Tự động) --</option>
           {voices.map((v) => (
             <option key={v.id} value={v.id}>
-              {v.gender === "female" ? "♀" : "♂"} {v.name} ({v.vibe})
+              {v.gender === "female" ? "♀" : "♂"} {v.name} — {v.vibe}
             </option>
           ))}
         </select>

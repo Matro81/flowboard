@@ -63,10 +63,11 @@ async def get_sync_status(tool: str = "PINHOLE"):
     """
     remote_ids = await _resolve_remote_ids(tool)
     with get_session() as s:
-        boards = s.query(Board).order_by(Board.created_at.desc()).all()
+        from sqlmodel import select
+        boards = s.exec(select(Board).order_by(Board.created_at.desc())).all()
         binds = {
             b.board_id: b.flow_project_id
-            for b in s.query(BoardFlowProject).all()
+            for b in s.exec(select(BoardFlowProject)).all()
         }
         board_status = []
         for b in boards:
@@ -95,10 +96,11 @@ async def sync_up(tool: str = "PINHOLE"):
     # Snapshot the boards that need work. Read-only pass to avoid
     # holding the session during the TRPC round-trips below.
     with get_session() as s:
-        boards = s.query(Board).all()
+        from sqlmodel import select
+        boards = s.exec(select(Board)).all()
         binds = {
             b.board_id: b.flow_project_id
-            for b in s.query(BoardFlowProject).all()
+            for b in s.exec(select(BoardFlowProject)).all()
         }
         to_sync = [
             (b.id, b.name, binds.get(b.id))
