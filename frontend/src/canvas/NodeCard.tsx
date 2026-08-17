@@ -154,20 +154,69 @@ function CharacterBody({ rfId, data }: { rfId: string; data: FlowboardNodeData }
   }
 
   function playSample(voice: FlowVoice) {
-    if ("speechSynthesis" in window) {
-      window.speechSynthesis.cancel();
-      if (playingVoice === voice.id) {
-        setPlayingVoice(null);
-        return;
-      }
-      const utter = new SpeechSynthesisUtterance(voice.sample_text);
-      utter.rate = 1.0;
-      utter.pitch = voice.gender === "female" ? 1.15 : 0.85;
-      utter.onend = () => setPlayingVoice(null);
-      utter.onerror = () => setPlayingVoice(null);
-      setPlayingVoice(voice.id);
-      window.speechSynthesis.speak(utter);
+    if (!("speechSynthesis" in window)) return;
+    window.speechSynthesis.cancel();
+    if (playingVoice === voice.id) {
+      setPlayingVoice(null);
+      return;
     }
+    const allVoices = window.speechSynthesis.getVoices();
+    const viVoice = allVoices.find((v) => v.lang.toLowerCase().startsWith("vi"));
+
+    const hasVi = !!viVoice;
+    const text = hasVi ? voice.sample_text : voice.sample_text_en || `Hello, I am ${voice.name}. My voice is ${voice.vibe}.`;
+
+    const utter = new SpeechSynthesisUtterance(text);
+    if (hasVi && viVoice) {
+      utter.voice = viVoice;
+      utter.lang = "vi-VN";
+    } else {
+      const isFemale = voice.gender === "female";
+      const matchedVoice =
+        allVoices.find(
+          (v) =>
+            v.lang.toLowerCase().startsWith("en") &&
+            (isFemale
+              ? /female|zira|samantha|karen|victoria|jenny/i.test(v.name)
+              : /male|david|george|alex|guy/i.test(v.name)),
+        ) ||
+        allVoices.find((v) => v.lang.toLowerCase().startsWith("en")) ||
+        allVoices[0];
+      if (matchedVoice) utter.voice = matchedVoice;
+      utter.lang = matchedVoice?.lang || "en-US";
+    }
+
+    // Modulate pitch and rate per character voice profile so each sounds distinct
+    if (voice.id === "Aoede") {
+      utter.pitch = 1.15;
+      utter.rate = 0.95;
+    } else if (voice.id === "Kore") {
+      utter.pitch = 1.3;
+      utter.rate = 0.88;
+    } else if (voice.id === "Leda") {
+      utter.pitch = 1.0;
+      utter.rate = 1.05;
+    } else if (voice.id === "Zephyr") {
+      utter.pitch = 1.22;
+      utter.rate = 1.12;
+    } else if (voice.id === "Puck") {
+      utter.pitch = 1.18;
+      utter.rate = 1.1;
+    } else if (voice.id === "Charon") {
+      utter.pitch = 0.65;
+      utter.rate = 0.88;
+    } else if (voice.id === "Fenrir") {
+      utter.pitch = 0.8;
+      utter.rate = 0.95;
+    } else if (voice.id === "Orpheus") {
+      utter.pitch = 0.92;
+      utter.rate = 0.92;
+    }
+
+    utter.onend = () => setPlayingVoice(null);
+    utter.onerror = () => setPlayingVoice(null);
+    setPlayingVoice(voice.id);
+    window.speechSynthesis.speak(utter);
   }
 
   async function uploadHead(file: File) {
@@ -218,7 +267,9 @@ function CharacterBody({ rfId, data }: { rfId: string; data: FlowboardNodeData }
         vibe: data.charVibe as string,
         country: data.charCountry as string,
       });
-      useGenerationStore.getState().openGenerationDialog(rfId, res.prompt);
+      useGenerationStore.getState().openGenerationDialog(rfId, res.prompt, {
+        targetSlot: "turnaround",
+      });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Turnaround prompt failed");
     } finally {
@@ -227,7 +278,9 @@ function CharacterBody({ rfId, data }: { rfId: string; data: FlowboardNodeData }
   }
 
   function openGenerateHead() {
-    useGenerationStore.getState().openGenerationDialog(rfId, data.prompt ?? "");
+    useGenerationStore.getState().openGenerationDialog(rfId, data.prompt ?? "", {
+      targetSlot: "headshot",
+    });
   }
 
   const selectedVoice = voices.find((v) => v.id === currentVoiceId);

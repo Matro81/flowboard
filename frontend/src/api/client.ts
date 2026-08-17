@@ -922,6 +922,7 @@ export interface FlowVoice {
   vibe: string;
   description: string;
   sample_text: string;
+  sample_text_en?: string;
   preview_url: string | null;
 }
 

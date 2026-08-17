@@ -271,6 +271,7 @@ export function GenerationDialog() {
   const targetType = node?.data.type ?? "image";
   const isVideo = targetType === "video";
   const isCharacter = targetType === "character";
+  const isTurnaround = isCharacter && openDialog.targetSlot === "turnaround";
   const isStoryboard = targetType === "Storyboard";
   // Omni Flash is a video model but with image-target semantics: it
   // takes ingredients (multi reference images), NOT a single i2v start
@@ -408,13 +409,10 @@ export function GenerationDialog() {
         }
       }
       setPrompt(initialPrompt);
-      // Character → always 1:1 portrait headshot (its own opinionated
-      // default; ignores upstream aspect because character is the source).
-      // Image / video → match upstream aspect when available; fall back to
-      // landscape (image) / landscape (video) when the graph has no info.
+      // Character → 1:1 portrait headshot, or 16:9 landscape for 3-angle turnaround.
       let nextAspect: AspectKey;
       if (openNodeType === "character") {
-        nextAspect = "IMAGE_ASPECT_RATIO_SQUARE";
+        nextAspect = isTurnaround ? "IMAGE_ASPECT_RATIO_LANDSCAPE" : "IMAGE_ASPECT_RATIO_SQUARE";
       } else {
         const inherited = pickDefaultAspect(
           rfId,
@@ -631,6 +629,18 @@ export function GenerationDialog() {
       return;
     }
     if (isCharacter) {
+      if (isTurnaround) {
+        const portraitMediaId = (node?.data.portraitMediaId as string) || (node?.data.mediaId as string);
+        dispatchGeneration(rfId, {
+          prompt: prompt.trim(),
+          aspectRatio: aspectRatio ?? "IMAGE_ASPECT_RATIO_LANDSCAPE",
+          variantCount: 1,
+          targetSlot: "turnaround",
+          refMediaIds: portraitMediaId ? [portraitMediaId] : [],
+        });
+        closeGenerationDialog();
+        return;
+      }
       const built = buildCharacterPrompt(charGender, charCountry, charVibe, charExtras);
       // Stamp the picker selections directly onto the node so the detail
       // panel can show "Country: Nhật Bản · Vibe: Douyin" later. These
@@ -653,6 +663,7 @@ export function GenerationDialog() {
         prompt: built,
         aspectRatio,
         variantCount: variants,
+        targetSlot: "headshot",
       });
       closeGenerationDialog();
       return;
@@ -678,59 +689,64 @@ export function GenerationDialog() {
           const res = await autoPromptBatchApi(dbId, variants);
           perVariantPrompts = res.prompts;
           // Show all N prompts joined so the user can verify before
-          // dispatch — we don't dispatch until they re-click Generate
-          // (so they see what was synthesised first time around either)…
-          // actually simpler: dispatch immediately with the first as the
-          // "display" prompt; full per-variant list goes through opts.
-          finalPrompt = res.prompts[0] ?? "";
-          setPrompt(res.prompts.join("\n\n— variant —\n\n"));
+          // generating; perVariantPrompts holds the array that actually
+          // ships to the backend.
+          finalPrompt = res.prompts.join("\n\n---\n\n");
+          setPrompt(finalPrompt);
+          setAutoPromptUsed(true);
         } else {
-          const res = await autoPromptApi(dbId, isVideo ? { camera } : undefined);
+          const res = await autoPromptApi(
+            dbId,
+            isVideo ? { camera } : undefined,
+          );
           finalPrompt = res.prompt;
           setPrompt(finalPrompt);
+          setAutoPromptUsed(true);
         }
-        setAutoPromptUsed(true);
-        useBoardStore.getState().updateNodeData(rfId, { autoPromptStatus: undefined });
       } catch (err) {
-        setAutoBuilding(false);
-        useBoardStore.getState().updateNodeData(rfId, { autoPromptStatus: "failed" });
         useGenerationStore.setState({
-          error: err instanceof Error
-            ? `Auto-prompt failed: ${err.message}`
-            : "Auto-prompt failed",
+          error: `Auto-prompt failed: ${err instanceof Error ? err.message : String(err)}`,
         });
         return;
+      } finally {
+        setAutoBuilding(false);
+        useBoardStore.getState().updateNodeData(rfId, { autoPromptStatus: undefined });
       }
-      setAutoBuilding(false);
     }
+
     if (isVideo) {
-      // Append the camera-movement constraint to whatever motion prompt
-      // we have (manual or auto-synthesised). Putting it last makes it
-      // the dominant instruction the model resolves against — overrides
-      // any conflicting "slow dolly-in" the synthesizer might have output.
-      const camInstruction = cameraInstruction(camera);
-      const videoPrompt = camInstruction
-        ? `${finalPrompt}. ${camInstruction}`
+      // Storyboard → video: when ANY upstream is a Storyboard composite,
+      // the motion prompt MUST be the fixed panel-animation template.
+      // Ignore whatever text is in the input box so user edits can't
+      // break panel-ordered playback.
+      const promptToDispatch = hasStoryboardUpstream
+        ? buildStoryboardVideoPrompt(storyboardUpstreamGrid)
         : finalPrompt;
-      // Filter the upstream variants to the user's selection — the dialog
-      // shows one toggleable thumbnail per variant + an All/None action.
-      const picked = sourceMediaIds.filter((_, i) => selectedSourceIdx.has(i));
-      const useMulti = picked.length > 1;
+      // Camera instruction is appended here at dispatch time so the
+      // raw synthesised text stays pure in the store. When dynamic,
+      // cameraInstruction is "" → no-op.
+      const instruction = cameraInstruction(camera);
+      const withCamera = instruction
+        ? `${promptToDispatch.trim()}\n\n${instruction}`
+        : promptToDispatch;
+      // When the user checked multiple upstream source variants, dispatch
+      // them as a batch. When single (or only 1 selected), pick the first.
+      const selected = Array.from(selectedSourceIdx).sort((a, b) => a - b);
+      const isMulti = selected.length > 1;
+      const pickedIds = selected.map((i) => sourceMediaIds[i]).filter(Boolean);
       dispatchGeneration(rfId, {
-        prompt: videoPrompt,
+        prompt: withCamera,
         aspectRatio,
         kind: "video",
-        sourceMediaId: useMulti ? undefined : picked[0],
-        sourceMediaIds: useMulti ? picked : undefined,
-        // Tell the node UI how many video tiles to reserve while pending —
-        // otherwise it defaults to 1 placeholder even though we're
-        // dispatching N i2v ops.
-        variantCount: picked.length,
+        ...(isMulti
+          ? { sourceMediaIds: pickedIds }
+          : { sourceMediaId: pickedIds[0] ?? sourceMediaId ?? undefined }),
       });
     } else {
       dispatchGeneration(rfId, {
         prompt: finalPrompt,
         aspectRatio,
+        kind: "image",
         variantCount: variants,
         prompts: perVariantPrompts,
       });
@@ -738,25 +754,12 @@ export function GenerationDialog() {
     closeGenerationDialog();
   }
 
-  // The dialog's local `autoBuilding` flag covers the in-flight window
-  // when THIS dialog instance is composing. But the dialog can be closed
-  // + reopened mid-flight, leaving the local flag fresh while the node-
-  // level `autoPromptStatus` / `aiBriefStatus` is still pending from the
-  // first run. Treat both signals as "busy" so the user can't double-fire.
-  const nodeLLMBusy =
-    node?.data.autoPromptStatus === "pending"
-    || node?.data.aiBriefStatus === "pending";
-  const isWorking = autoBuilding || nodeLLMBusy;
+  const isWorking =
+    autoBuilding ||
+    node?.data.autoPromptStatus === "pending" ||
+    node?.data.aiBriefStatus === "pending";
 
-  // Both image and video allow empty prompt — we'll auto-synth on submit.
-  // Veo i2v needs at least one selected source variant; Omni Flash
-  // needs at least one ingredient (any upstream image-bearing node).
-  // Other targets just need the LLM not be busy.
-  const canGenerate = isCharacter
-    ? charGender !== null || charCountry !== null || charExtras.trim().length > 0
-    : isOmniVideo
-    ? refSourceNodes.length > 0 && !isWorking
-    : isVideo
+  const canGenerate = isVideo
     ? selectedSourceIdx.size > 0 && !isWorking
     : !isWorking;
 
@@ -781,8 +784,10 @@ export function GenerationDialog() {
             <h2 id="gen-dialog-title" className="gen-dialog__title">
               {isVideo
                 ? "Generate video"
+                : isTurnaround
+                ? "Sinh toàn thân 3 góc (Turnaround)"
                 : isCharacter
-                ? "Generate character"
+                ? "Generate character headshot"
                 : isStoryboard
                 ? "Generate storyboard"
                 : isPrompt
@@ -802,12 +807,21 @@ export function GenerationDialog() {
           </button>
         </div>
 
-        {/* Prompt — hidden when character mode shows the builder instead */}
-        {!isCharacter && (
+        {/* Turnaround Notice */}
+        {isTurnaround && (
+          <div className="gen-dialog__field">
+            <p className="gen-dialog__hint gen-dialog__hint--locked" style={{ margin: "0 0 10px 0" }}>
+              👤 <strong>Character Turnaround (Model Sheet 3 Góc)</strong>: Dùng ảnh chân dung làm khuôn mẫu để tạo bản vẽ 3 góc camera toàn thân (Chính diện - Nghiêng 45° - Phía sau).
+            </p>
+          </div>
+        )}
+
+        {/* Prompt — visible for regular nodes OR turnaround character */}
+        {(!isCharacter || isTurnaround) && (
           <div className="gen-dialog__field">
             <div className="gen-dialog__label-row">
               <label className="gen-dialog__label" htmlFor="gen-prompt">
-                {isVideo ? "Motion prompt" : "Prompt"}
+                {isVideo ? "Motion prompt" : isTurnaround ? "Turnaround Prompt" : "Prompt"}
                 {autoPromptUsed && (
                   <span className="gen-dialog__auto-badge" title="Auto-generated from upstream nodes">
                     ✨ auto
@@ -861,8 +875,8 @@ export function GenerationDialog() {
           </div>
         )}
 
-        {/* Character builder (character node only) */}
-        {isCharacter && (
+        {/* Character builder (Headshot mode only) */}
+        {isCharacter && !isTurnaround && (
           <>
             <div className="gen-dialog__field">
               <span className="gen-dialog__label">Gender</span>
@@ -1347,7 +1361,7 @@ export function GenerationDialog() {
             onClick={handleSubmit}
             disabled={!canGenerate}
             title={
-              nodeLLMBusy && !autoBuilding
+              isWorking && !autoBuilding
                 ? "Backend is still composing — try again in a moment"
                 : undefined
             }

@@ -7,7 +7,11 @@ type PollEntry = { requestId: number; timerId: ReturnType<typeof setTimeout> | n
 
 interface GenerationState {
   active: Record<string, PollEntry>;
-  openDialog: { rfId: string | null; prompt: string };
+  openDialog: {
+    rfId: string | null;
+    prompt: string;
+    targetSlot?: "headshot" | "turnaround";
+  };
   openViewer: { rfId: string | null; idx: number };
   projectId: string | null;
   // Auto-detected from Flow's createProject response — used as the
@@ -16,7 +20,11 @@ interface GenerationState {
   paygateTier: "PAYGATE_TIER_ONE" | "PAYGATE_TIER_TWO" | null;
   error: string | null;
 
-  openGenerationDialog(rfId: string, prompt: string): void;
+  openGenerationDialog(
+    rfId: string,
+    prompt: string,
+    opts?: { targetSlot?: "headshot" | "turnaround" },
+  ): void;
   closeGenerationDialog(): void;
   openResultViewer(rfId: string, idx?: number): void;
   closeResultViewer(): void;
@@ -40,6 +48,8 @@ interface GenerationState {
       // prompt — required for batch auto-prompt to keep poses distinct
       // across the 4 generated images.
       prompts?: string[];
+      targetSlot?: "headshot" | "turnaround";
+      refMediaIds?: string[];
     },
   ): Promise<void>;
 
@@ -110,12 +120,12 @@ export const useGenerationStore = create<GenerationState>((set, get) => ({
   paygateTier: null,
   error: null,
 
-  openGenerationDialog(rfId, prompt) {
-    set({ openDialog: { rfId, prompt } });
+  openGenerationDialog(rfId, prompt, opts) {
+    set({ openDialog: { rfId, prompt, targetSlot: opts?.targetSlot } });
   },
 
   closeGenerationDialog() {
-    set({ openDialog: { rfId: null, prompt: "" } });
+    set({ openDialog: { rfId: null, prompt: "", targetSlot: undefined } });
   },
 
   openResultViewer(rfId, idx = 0) {
@@ -153,6 +163,8 @@ export const useGenerationStore = create<GenerationState>((set, get) => ({
     sourceMediaIds?: string[];
     variantCount?: number;
     prompts?: string[];
+    targetSlot?: "headshot" | "turnaround";
+    refMediaIds?: string[];
   }) {
     const projectId = await get().ensureProjectId();
     if (projectId === null) return;
@@ -182,17 +194,26 @@ export const useGenerationStore = create<GenerationState>((set, get) => ({
       clearTimeout(existingEntry.timerId);
     }
 
-    // Optimistically update node — record variantCount so the placeholder
-    // grid matches the eventual variant count even before generation finishes.
-    const variantCount = Math.max(1, Math.min(opts.variantCount ?? 1, 4));
-    useBoardStore.getState().updateNodeData(rfId, {
-      status: "queued",
-      prompt: opts.prompt,
-      error: undefined,
-      variantCount,
-      mediaIds: undefined,
-      mediaId: undefined,
-    });
+    // Optimistically update node
+    const isTurnaround = opts.targetSlot === "turnaround";
+    const variantCount = isTurnaround ? 1 : Math.max(1, Math.min(opts.variantCount ?? 1, 4));
+
+    if (isTurnaround) {
+      useBoardStore.getState().updateNodeData(rfId, {
+        status: "running",
+        turnaroundStatus: "running",
+        error: undefined,
+      });
+    } else {
+      useBoardStore.getState().updateNodeData(rfId, {
+        status: "queued",
+        prompt: opts.prompt,
+        error: undefined,
+        variantCount,
+        mediaIds: undefined,
+        mediaId: undefined,
+      });
+    }
 
     // Create request
     const kind = opts.kind ?? "image";
@@ -203,15 +224,6 @@ export const useGenerationStore = create<GenerationState>((set, get) => ({
         const settings = useSettingsStore.getState();
         const isOmni = settings.videoModel === "omni_flash";
 
-        // Omni Flash takes a fundamentally different input shape from
-        // Veo i2v. Veo wants ONE source image to use as the literal
-        // start frame (multi-source = batch of N parallel i2v calls,
-        // one per variant). Omni Flash takes "ingredients" — a list of
-        // referenceImages[] where each entry is IMAGE_USAGE_TYPE_ASSET.
-        // The model conditions on the assets but doesn't use any of
-        // them as a literal frame. So we walk EVERY upstream image-
-        // bearing edge (character / image / visual_asset / Storyboard)
-        // and pass them all, not just the one edge the i2v UI picked.
         if (isOmni) {
           const ingredients = collectUpstreamRefMediaIds(rfId);
           if (ingredients.length === 0) {
@@ -233,19 +245,14 @@ export const useGenerationStore = create<GenerationState>((set, get) => ({
               project_id: projectId,
               ref_media_ids: ingredients,
               duration_s: settings.omniFlashDuration,
-              aspect_ratio:
-                opts.aspectRatio ?? "VIDEO_ASPECT_RATIO_PORTRAIT",
+              aspect_ratio: opts.aspectRatio ?? "VIDEO_ASPECT_RATIO_LANDSCAPE",
               paygate_tier:
                 opts.paygateTier ?? get().paygateTier ?? "PAYGATE_TIER_ONE",
             },
           });
         } else {
-          // Veo i2v path — still validates "must have a single source
-          // image / variant batch" because that's the model's input
-          // contract. Omni's ingredient validation above runs first
-          // when isOmni; this check only fires for the Veo branch.
-          const hasMulti =
-            Array.isArray(opts.sourceMediaIds) && opts.sourceMediaIds.length > 0;
+          // Standard Veo i2v path.
+          const hasMulti = Array.isArray(opts.sourceMediaIds) && opts.sourceMediaIds.length > 0;
           if (!hasMulti && !opts.sourceMediaId) {
             useBoardStore.getState().updateNodeData(rfId, { status: "error", error: "no source media" });
             set({ error: "Veo i2v requires a source image (connect an upstream image node)" });
@@ -255,11 +262,8 @@ export const useGenerationStore = create<GenerationState>((set, get) => ({
             prompt: opts.prompt,
             project_id: projectId,
             aspect_ratio: opts.aspectRatio ?? "VIDEO_ASPECT_RATIO_LANDSCAPE",
-            // Tier precedence: explicit caller arg > auto-detected from
-            // Flow > TIER_ONE fallback. The dialog no longer asks the user.
             paygate_tier:
               opts.paygateTier ?? get().paygateTier ?? "PAYGATE_TIER_ONE",
-            // Backend resolves [tier][quality][aspect] → Flow model key.
             video_quality: settings.videoQuality,
           };
           if (hasMulti) {
@@ -274,7 +278,10 @@ export const useGenerationStore = create<GenerationState>((set, get) => ({
           });
         }
       } else {
-        const refMediaIds = collectUpstreamRefMediaIds(rfId);
+        const upstreamRefs = collectUpstreamRefMediaIds(rfId);
+        const explicitRefs = opts.refMediaIds ?? [];
+        const combinedRefs = Array.from(new Set([...upstreamRefs, ...explicitRefs]));
+
         const params: Record<string, unknown> = {
           prompt: opts.prompt,
           project_id: projectId,
@@ -282,16 +289,11 @@ export const useGenerationStore = create<GenerationState>((set, get) => ({
           paygate_tier:
             opts.paygateTier ?? get().paygateTier ?? "PAYGATE_TIER_ONE",
           variant_count: variantCount,
-          // User's image model preference from the Settings panel.
-          // Backend resolves the nickname → real Flow model identifier.
           image_model: useSettingsStore.getState().imageModel,
         };
-        if (refMediaIds.length > 0) {
-          params.ref_media_ids = refMediaIds;
+        if (combinedRefs.length > 0) {
+          params.ref_media_ids = combinedRefs;
         }
-        // Per-variant prompts: when present, each variant uses its own
-        // text instead of all sharing `params.prompt`. Backend falls back
-        // to single prompt when missing/short.
         if (opts.prompts && opts.prompts.length > 0) {
           params.prompts = opts.prompts;
         }
@@ -309,17 +311,24 @@ export const useGenerationStore = create<GenerationState>((set, get) => ({
 
     // Start polling
     const requestId = reqDto.id;
-    // Cap consecutive network errors so a dead agent can't keep a poll alive
-    // forever; bail to failed state after this many.
-    const MAX_NETWORK_RETRIES = 8;
+    let attempts = 0;
+    const maxAttempts = 120; // 4 minutes
     let networkRetries = 0;
+    const MAX_NETWORK_RETRIES = 8;
 
-    function scheduleNextPoll() {
-      // If the node was cancelled (e.g. user deleted it), stop chaining.
-      if (get().active[rfId] === undefined) return;
+    const scheduleNextPoll = () => {
+      if (attempts >= maxAttempts) {
+        useBoardStore.getState().updateNodeData(rfId, { status: "error", error: "Generation timed out" });
+        set((s) => {
+          const next = { ...s.active };
+          delete next[rfId];
+          return { active: next };
+        });
+        return;
+      }
+      attempts++;
 
       const timerId = setTimeout(async () => {
-        // Also bail if the user cancelled (or deleted the node) while we slept.
         if (get().active[rfId] === undefined) return;
         try {
           const req = await getRequest(requestId);
@@ -327,7 +336,6 @@ export const useGenerationStore = create<GenerationState>((set, get) => ({
 
           if (req.status === "running") {
             useBoardStore.getState().updateNodeData(rfId, { status: "running" });
-            // Reschedule
             set((s) => ({
               active: {
                 ...s.active,
@@ -336,41 +344,17 @@ export const useGenerationStore = create<GenerationState>((set, get) => ({
             }));
             scheduleNextPoll();
           } else if (req.status === "done") {
-            // `media_ids` may contain `null` placeholders for variants
-            // the backend marked as partial-failures (e.g. Veo content
-            // filter blocked one of 4 i2v clips while the other 3
-            // succeeded). Keep the positional alignment so the frontend
-            // can map slot i ↔ upstream variant i, but pick the first
-            // non-null entry as the "primary" mediaId for legacy
-            // single-tile UI consumers.
             const mediaIds = (req.result["media_ids"] as (string | null)[] | undefined) ?? [];
             const mediaId = mediaIds.find(
               (m): m is string => typeof m === "string" && m.length > 0,
             );
-            // Surface the partial-error summary onto data.error while
-            // keeping status="done" — the node still has renderable
-            // variants, but the UI can flag that some slots got blocked.
             const partialError = (req.result["partial_error"] as string | undefined) ?? null;
-            // Per-slot error codes (aligned to mediaIds) so the detail
-            // viewer can render the exact filter reason on each blocked
-            // tile. `null` length-matched array when nothing's blocked;
-            // missing on legacy / non-video results.
             const slotErrors =
               (req.result["slot_errors"] as (string | null)[] | undefined) ?? null;
-            // Stamp the model used onto the node so the detail panel can
-            // show "Banana Pro" / "Quality" etc. — read from req.params
-            // (what was dispatched). Tier-1 UI locks Lite + Quality so
-            // we trust params directly without a backend fallback round-trip.
             const stampedImageModel =
               req.type === "gen_image"
                 ? (req.params["image_model"] as string | undefined)
                 : undefined;
-            // For Veo (`gen_video`) the dispatched `video_quality` IS the
-            // model selector (lite / fast / quality / lite_relaxed). For
-            // Omni Flash (`gen_video_omni`) the model is duration-scoped —
-            // derive the Flow model key (abra_r2v_<N>s) from the dispatched
-            // duration so the detail panel can surface the exact variant
-            // that ran (mirrors backend's resolve_omni_flash_model).
             let stampedVideoQuality: string | undefined;
             if (req.type === "gen_video") {
               stampedVideoQuality = req.params["video_quality"] as
@@ -382,73 +366,71 @@ export const useGenerationStore = create<GenerationState>((set, get) => ({
                 stampedVideoQuality = `abra_r2v_${d}s`;
               }
             }
-            useBoardStore.getState().updateNodeData(rfId, {
-              status: "done",
-              mediaId,
-              mediaIds,
-              slotErrors: slotErrors ?? undefined,
-              aiBrief: undefined,
-              aspectRatio: opts.aspectRatio,
-              renderedAt: new Date().toISOString(),
-              error: partialError ?? undefined,
-              ...(stampedImageModel ? { imageModel: stampedImageModel } : {}),
-              ...(stampedVideoQuality ? { videoQuality: stampedVideoQuality } : {}),
-            });
-            // Persist to backend so the node survives page reload.
-            const dbId = parseInt(rfId, 10);
-            if (!isNaN(dbId) && mediaId) {
-              const n = useBoardStore.getState().nodes.find((x) => x.id === rfId);
-              const d = n?.data;
-              // Backend merges `data`, so only deltas need to ship.
-              // `aiBrief: null` is the explicit "clear" sentinel —
-              // undefined would be dropped by JSON.stringify and leave
-              // the stale brief sitting on the node.
-              patchNode(dbId, {
+
+            if (isTurnaround && mediaId) {
+              useBoardStore.getState().updateNodeData(rfId, {
                 status: "done",
-                data: {
-                  // Persist prompt — without this, reloading the page
-                  // shows "(no prompt)" in the detail panel because the
-                  // dispatch flow only stamps prompt into the in-memory
-                  // store, never to the backend. This used to live in
-                  // the patchNode payload pre-Phase 20 and was
-                  // accidentally dropped during the "only deltas" refactor.
-                  prompt: opts.prompt,
-                  mediaId,
-                  mediaIds,
-                  slotErrors: slotErrors ?? null,
-                  variantCount: d?.variantCount ?? mediaIds.length,
-                  aiBrief: null,
-                  aspectRatio: opts.aspectRatio,
-                  renderedAt: new Date().toISOString(),
-                  // `null` clears stale error from a previous attempt
-                  // when this run was clean; otherwise persist the
-                  // partial summary so it survives reload.
-                  error: partialError ?? null,
-                  ...(stampedImageModel ? { imageModel: stampedImageModel } : {}),
-                  ...(stampedVideoQuality ? { videoQuality: stampedVideoQuality } : {}),
-                },
-              }).catch(() => {
-                // Non-fatal: the in-memory state is still correct for this session.
+                turnaroundMediaId: mediaId,
+                turnaroundAspectRatio: opts.aspectRatio,
+                turnaroundStatus: undefined,
+                renderedAt: new Date().toISOString(),
+                error: partialError ?? undefined,
               });
+              const dbId = parseInt(rfId, 10);
+              if (!isNaN(dbId)) {
+                patchNode(dbId, {
+                  status: "done",
+                  data: {
+                    turnaroundMediaId: mediaId,
+                    turnaroundAspectRatio: opts.aspectRatio,
+                    renderedAt: new Date().toISOString(),
+                  },
+                }).catch(() => {});
+              }
+            } else {
+              useBoardStore.getState().updateNodeData(rfId, {
+                status: "done",
+                mediaId,
+                portraitMediaId: mediaId,
+                mediaIds,
+                slotErrors: slotErrors ?? undefined,
+                aiBrief: undefined,
+                aspectRatio: opts.aspectRatio,
+                renderedAt: new Date().toISOString(),
+                error: partialError ?? undefined,
+                ...(stampedImageModel ? { imageModel: stampedImageModel } : {}),
+                ...(stampedVideoQuality ? { videoQuality: stampedVideoQuality } : {}),
+              });
+              const dbId = parseInt(rfId, 10);
+              if (!isNaN(dbId) && mediaId) {
+                const n = useBoardStore.getState().nodes.find((x) => x.id === rfId);
+                const d = n?.data;
+                patchNode(dbId, {
+                  status: "done",
+                  data: {
+                    prompt: opts.prompt,
+                    mediaId,
+                    portraitMediaId: mediaId,
+                    mediaIds,
+                    slotErrors: slotErrors ?? null,
+                    variantCount: d?.variantCount ?? mediaIds.length,
+                    aiBrief: null,
+                    aspectRatio: opts.aspectRatio,
+                    renderedAt: new Date().toISOString(),
+                    error: partialError ?? null,
+                    ...(stampedImageModel ? { imageModel: stampedImageModel } : {}),
+                    ...(stampedVideoQuality ? { videoQuality: stampedVideoQuality } : {}),
+                  },
+                }).catch(() => {});
+              }
             }
-            // Generation results always carry a prompt (the one we just
-            // dispatched with), and downstream synth treats prompt as the
-            // source of truth. Vision adds nothing here — skip it.
-            // Manual upload paths in NodeCard.tsx still call
-            // requestAutoBrief; that helper now early-returns if the
-            // target node already has a prompt, so behaviour stays sane
-            // for upload-then-type flows too.
+
             set((s) => {
               const next = { ...s.active };
               delete next[rfId];
               return { active: next };
             });
           } else if (req.status === "failed" || req.status === "timeout") {
-            // 'timeout' is the dedicated terminal state for the
-            // 5-minute video-gen budget. We render it as a node error
-            // so the card visually flags the stuck run, but tag the
-            // message so the user can tell auto-timeout apart from a
-            // generation failure.
             const errMsg =
               req.status === "timeout"
                 ? `Timed out after 5 minutes (${req.error ?? "video_timeout"})`
@@ -460,9 +442,6 @@ export const useGenerationStore = create<GenerationState>((set, get) => ({
               return { active: next, error: errMsg };
             });
           } else if (req.status === "canceled") {
-            // User-initiated cancel from the activity bell. Don't
-            // stamp the node as 'error' — clear the in-flight state
-            // and leave whatever the node was showing before.
             useBoardStore.getState().updateNodeData(rfId, { status: "idle" });
             set((s) => {
               const next = { ...s.active };
@@ -501,7 +480,7 @@ export const useGenerationStore = create<GenerationState>((set, get) => ({
           [rfId]: { requestId, timerId },
         },
       }));
-    }
+    };
 
     // Initialize active entry before first poll
     set((s) => ({
