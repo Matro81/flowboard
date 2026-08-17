@@ -1,0 +1,20 @@
+{
+  "modelStatus": [
+    {
+      "modelKey": "veo_3_1_quality",
+      "status": "MODEL_HEALTH_STATUS_HEALTHY"
+    },
+    {
+      "modelKey": "veo_3_1_lite",
+      "status": "MODEL_HEALTH_STATUS_HEALTHY"
+    },
+    {
+      "modelKey": "veo_3_1_fast",
+      "status": "MODEL_HEALTH_STATUS_HEALTHY"
+    },
+    {
+      "modelKey": "abra",
+      "status": "MODEL_HEALTH_STATUS_HEALTHY"
+    }
+  ]
+}
