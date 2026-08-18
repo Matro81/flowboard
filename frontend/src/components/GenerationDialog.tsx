@@ -307,7 +307,12 @@ export function GenerationDialog() {
   const storyboardUpstreamGrid = normaliseStoryboardGrid(
     storyboardUpstream?.data.storyboardGrid,
   );
-  const sourceMediaId = sourceNode?.data.mediaId ?? null;
+  const sourceMediaId =
+    sourceNode?.data.mediaId ??
+    (sourceNode?.data.type === "character"
+      ? ((sourceNode.data.portraitMediaId as string) || (sourceNode.data.turnaroundMediaId as string))
+      : null) ??
+    null;
   // Drop null placeholders from the upstream variant list — partial-
   // batch results may carry them, but downstream dispatch needs a
   // dense array of valid mediaIds to feed into Flow.
@@ -780,7 +785,7 @@ export function GenerationDialog() {
     node?.data.aiBriefStatus === "pending";
 
   const canGenerate = isVideo
-    ? selectedSourceIdx.size > 0 && !isWorking
+    ? (isOmniVideo ? (refSourceNodes.length > 0 || selectedSourceIdx.size > 0) : selectedSourceIdx.size > 0) && !isWorking
     : !isWorking;
 
   return (

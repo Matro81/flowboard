@@ -1499,6 +1499,17 @@ function VideoBody({ rfId, data }: { rfId: string; data: FlowboardNodeData }) {
           {data.error}
         </p>
       )}
+      {!ids.some(Boolean) && !isProcessing && (
+        <div className="video-empty-actions" style={{ marginTop: 6 }}>
+          <button
+            type="button"
+            className="character-btn character-btn--primary"
+            onClick={() => useGenerationStore.getState().openGenerationDialog(rfId, data.prompt ?? "")}
+          >
+            ✦ Tạo Video
+          </button>
+        </div>
+      )}
     </div>
   );
 }
