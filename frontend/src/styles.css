@@ -4417,13 +4417,44 @@ button:disabled {
   justify-content: flex-end;
 }
 .plan-preview-card__review-btn {
-  background: transparent;
-  border: 1px solid var(--border);
-  color: var(--muted);
-  padding: 4px 10px;
-  border-radius: 4px;
-  font-size: 11px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  background: var(--accent, #7c5cff);
+  border: 1px solid var(--accent, #7c5cff);
+  color: #ffffff;
+  padding: 5px 14px;
+  border-radius: 6px;
+  font-size: 11.5px;
+  font-weight: 600;
+  cursor: pointer;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2), 0 0 12px rgba(124, 92, 255, 0.25);
+  transition: all 140ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.plan-preview-card__btn-icon {
+  font-size: 10px;
+}
+
+.plan-preview-card__review-btn:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--accent, #7c5cff) 85%, white);
+  border-color: color-mix(in srgb, var(--accent, #7c5cff) 85%, white);
+  transform: translateY(-1px);
+  box-shadow: 0 3px 12px rgba(124, 92, 255, 0.45);
+}
+
+.plan-preview-card__review-btn:active:not(:disabled) {
+  transform: translateY(0);
+}
+
+.plan-preview-card__review-btn:disabled {
+  background: var(--panel-high, #1e222d);
+  border-color: var(--border, #2d3343);
+  color: var(--muted, #64748b);
   cursor: not-allowed;
+  box-shadow: none;
+  opacity: 0.6;
 }
 
 /* ── AI Providers section in Settings ─────────────────────────────────── */

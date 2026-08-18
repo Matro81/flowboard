@@ -57,10 +57,20 @@ function PlanPreviewCard({ plan }: { plan: PlanDTO }) {
   const alreadyExecuted = plan.status === "done" || plan.status === "running";
 
   let runLabel: string;
-  if (isThisPlanRunning) runLabel = activeRun?.status === "pending" ? "Queued…" : "Running…";
-  else if (plan.status === "done") runLabel = "Done";
-  else if (plan.status === "failed") runLabel = "Failed";
-  else runLabel = "Run";
+  let runIcon: string = "▶";
+  if (isThisPlanRunning) {
+    runLabel = activeRun?.status === "pending" ? "Queued…" : "Running…";
+    runIcon = "◌";
+  } else if (plan.status === "done") {
+    runLabel = "Completed";
+    runIcon = "✓";
+  } else if (plan.status === "failed") {
+    runLabel = "Failed";
+    runIcon = "✗";
+  } else {
+    runLabel = "Run Pipeline";
+    runIcon = "▶";
+  }
 
   const disabled = isThisPlanRunning || otherPlanRunning || alreadyExecuted;
 
@@ -76,6 +86,7 @@ function PlanPreviewCard({ plan }: { plan: PlanDTO }) {
       <div className="plan-preview-card__stats">{statsText}</div>
       <div className="plan-preview-card__actions">
         <button
+          type="button"
           className="plan-preview-card__review-btn"
           disabled={disabled}
           onClick={() => {
@@ -89,7 +100,8 @@ function PlanPreviewCard({ plan }: { plan: PlanDTO }) {
               : "Materialise plan onto canvas and run generation"
           }
         >
-          {runLabel}
+          <span className="plan-preview-card__btn-icon">{runIcon}</span>
+          <span>{runLabel}</span>
         </button>
       </div>
     </div>
