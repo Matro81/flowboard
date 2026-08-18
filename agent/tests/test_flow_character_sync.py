@@ -1,5 +1,5 @@
 import pytest
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock
 from fastapi.testclient import TestClient
 from flowboard.main import app
 from flowboard.services.flow_sdk import FlowSDK
@@ -9,7 +9,15 @@ client = TestClient(app)
 @pytest.mark.asyncio
 async def test_sdk_sync_flow_character_entity_existing():
     mock_client = AsyncMock()
-    mock_client.api_request.return_value = {"status": "SUCCESS"}
+    
+    # Handle copyProjectMedia returning workflow.name and PATCH returning SUCCESS
+    def side_effect_api(url, method, headers=None, body=None):
+        if "copyProjectMedia" in url:
+            slot = body.get("destinationMediaContext", {}).get("entityContext", {}).get("characterSlot", {}).get("imageReferenceIndex", 0)
+            return {"data": {"workflow": {"name": f"wf-copied-slot-{slot}"}}}
+        return {"status": "SUCCESS"}
+        
+    mock_client.api_request.side_effect = side_effect_api
     
     sdk = FlowSDK(client=mock_client)
     res = await sdk.sync_flow_character_entity(
@@ -26,16 +34,20 @@ async def test_sdk_sync_flow_character_entity_existing():
     assert res["display_name"] == "Lan"
     assert "character/test-ent-456" in res["url"]
     
-    mock_client.api_request.assert_called_once()
-    call_args = mock_client.api_request.call_args[1]
-    assert call_args["url"] == "https://aisandbox-pa.googleapis.com/v1/flow/entities"
-    assert call_args["method"] == "PATCH"
+    # 2 copyProjectMedia calls (slot 0, slot 1) + 1 PATCH call
+    assert mock_client.api_request.call_count == 3
+    patch_call = mock_client.api_request.call_args_list[-1][1]
+    assert patch_call["url"] == "https://aisandbox-pa.googleapis.com/v1/flow/entities"
+    assert patch_call["method"] == "PATCH"
     
-    body = call_args["body"]
+    body = patch_call["body"]
     assert body["entity"]["projectId"] == "test-proj-123"
     assert body["entity"]["entityId"] == "test-ent-456"
     assert body["entity"]["entityInfo"]["displayName"] == "Lan"
-    assert len(body["entity"]["entityInfo"]["characterInfo"]["imageReferences"]) == 2
+    assert body["entity"]["entityInfo"]["characterInfo"]["imageReferences"] == [
+        {"workflowId": "wf-copied-slot-0"},
+        {"workflowId": "wf-copied-slot-1"}
+    ]
     assert body["entity"]["entityInfo"]["characterInfo"]["audioReferences"][0]["presetVoiceId"] == "Aoede"
 
 
@@ -60,14 +72,20 @@ async def test_sdk_sync_flow_character_entity_mint_new():
             }
         }
     }
-    mock_client.api_request.return_value = {"status": "SUCCESS"}
+    
+    def side_effect_api(url, method, headers=None, body=None):
+        if "copyProjectMedia" in url:
+            return {"data": {"workflow": {"name": "wf-copied-slot-0"}}}
+        return {"status": "SUCCESS"}
+        
+    mock_client.api_request.side_effect = side_effect_api
     
     sdk = FlowSDK(client=mock_client)
     res = await sdk.sync_flow_character_entity(
         project_id="test-proj-123",
         entity_id=None,  # No entity_id -> mint new
         display_name="Lan",
-        portrait_media_id="wf-headshot-1",
+        portrait_media_id="media-headshot-1",
         voice_name="Zephyr",
     )
     
@@ -80,6 +98,10 @@ async def test_sdk_sync_flow_character_entity_mint_new():
     assert trpc_kwargs["url"] == "https://labs.google/fx/api/trpc/flow.createEntity"
     assert trpc_kwargs["body"]["json"]["projectId"] == "test-proj-123"
     
-    mock_client.api_request.assert_called_once()
-    patch_call = mock_client.api_request.call_args[1]
+    # 1 copyProjectMedia (slot 0) + 1 PATCH
+    assert mock_client.api_request.call_count == 2
+    patch_call = mock_client.api_request.call_args_list[-1][1]
     assert patch_call["body"]["entity"]["entityId"] == "minted-char-uuid-789"
+    assert patch_call["body"]["entity"]["entityInfo"]["characterInfo"]["imageReferences"] == [
+        {"workflowId": "wf-copied-slot-0"}
+    ]

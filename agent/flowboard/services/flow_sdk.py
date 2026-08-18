@@ -35,6 +35,7 @@ VIDEO_OMNI_URL = f"{FLOW_API_BASE}/v1/video:batchAsyncGenerateVideoReferenceImag
 VIDEO_POLL_URL = f"{FLOW_API_BASE}/v1/video:batchCheckAsyncVideoGenerationStatus"
 UPLOAD_IMAGE_URL = f"{FLOW_API_BASE}/v1/flow/uploadImage"
 ENTITIES_URL = f"{FLOW_API_BASE}/v1/flow/entities"
+COPY_PROJECT_MEDIA_URL = f"{FLOW_API_BASE}/v1/flow:copyProjectMedia"
 
 
 # Omni Flash — variable-duration r2v video model. Each duration maps to a
@@ -1021,6 +1022,42 @@ class FlowSDK:
             return {"raw": resp, "error": "no_media_id_in_upload_response"}
         return {"raw": resp, "media_id": media_id}
 
+    async def copy_project_media_to_character(
+        self,
+        project_id: str,
+        entity_id: str,
+        media_id: str,
+        image_reference_index: int = 0,
+    ) -> Optional[str]:
+        """Copy a project media asset into a Character entity slot (0 = Face, 1 = Body).
+        Returns the resulting workflowId allocated for that slot."""
+        payload = {
+            "mediaId": str(media_id),
+            "destinationProjectId": str(project_id),
+            "destinationMediaContext": {
+                "entityContext": {
+                    "entityId": str(entity_id),
+                    "characterSlot": {
+                        "imageReferenceIndex": int(image_reference_index),
+                    },
+                }
+            },
+        }
+        resp = await self._client.api_request(
+            url=COPY_PROJECT_MEDIA_URL,
+            method="POST",
+            headers=dict(_API_HEADERS),
+            body=payload,
+        )
+        if isinstance(resp, dict):
+            data = resp.get("data") if isinstance(resp.get("data"), dict) else resp
+            wf = data.get("workflow") if isinstance(data, dict) else None
+            if isinstance(wf, dict) and wf.get("name"):
+                return str(wf["name"])
+            if isinstance(data, dict) and data.get("media", {}).get("workflowId"):
+                return str(data["media"]["workflowId"])
+        return None
+
     # ── Character Entity Sync (Google Flow Cast) ───────────────────────────
     async def sync_flow_character_entity(
         self,
@@ -1075,11 +1112,39 @@ class FlowSDK:
             char_info["audioReferences"] = [{"presetVoiceId": voice_name}]
             update_fields.append("entityInfo.characterInfo.audioReferences")
 
+        # Step 2: Copy Slot 0 (Portrait) and Slot 1 (Turnaround) into Character Entity
+        slot0_wf = None
+        slot1_wf = None
+        if portrait_media_id:
+            logger.info("Copying portrait media %s to character slot 0", portrait_media_id)
+            slot0_wf = await self.copy_project_media_to_character(
+                project_id=project_id,
+                entity_id=actual_entity_id,
+                media_id=portrait_media_id,
+                image_reference_index=0,
+            )
+            logger.info("Slot 0 allocated workflowId: %s", slot0_wf)
+
+        if turnaround_media_id:
+            logger.info("Copying turnaround media %s to character slot 1", turnaround_media_id)
+            slot1_wf = await self.copy_project_media_to_character(
+                project_id=project_id,
+                entity_id=actual_entity_id,
+                media_id=turnaround_media_id,
+                image_reference_index=1,
+            )
+            logger.info("Slot 1 allocated workflowId: %s", slot1_wf)
+
         # Slot 0 = Portrait Workflow, Slot 1 = Turnaround 3-angle Workflow
         image_refs: list[dict[str, Any]] = []
-        if portrait_media_id:
+        if slot0_wf:
+            image_refs.append({"workflowId": slot0_wf})
+        elif portrait_media_id:
             image_refs.append({"workflowId": portrait_media_id})
-        if turnaround_media_id:
+
+        if slot1_wf:
+            image_refs.append({"workflowId": slot1_wf})
+        elif turnaround_media_id:
             image_refs.append({"workflowId": turnaround_media_id})
 
         if image_refs:
