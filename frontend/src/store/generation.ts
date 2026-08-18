@@ -89,6 +89,18 @@ function collectUpstreamRefMediaIds(targetRfId: string): string[] {
     const src = nodes.find((n) => n.id === e.source);
     if (!src || !REF_SOURCE_TYPES.has(src.data.type)) continue;
 
+    if (src.data.type === "character") {
+      const portrait = (src.data.portraitMediaId as string) || (src.data.mediaId as string);
+      const turnaround = src.data.turnaroundMediaId as string;
+      if (portrait && typeof portrait === "string" && !ids.includes(portrait)) {
+        ids.push(portrait);
+      }
+      if (turnaround && typeof turnaround === "string" && !ids.includes(turnaround)) {
+        ids.push(turnaround);
+      }
+      continue;
+    }
+
     const variants = Array.isArray(src.data.mediaIds) ? src.data.mediaIds : [];
     const pinned = (e.data?.sourceVariantIdx ?? null) as number | null;
 
@@ -107,7 +119,7 @@ function collectUpstreamRefMediaIds(targetRfId: string): string[] {
       chosen = variants[0] as string;
     }
 
-    if (chosen) ids.push(chosen);
+    if (chosen && !ids.includes(chosen)) ids.push(chosen);
   }
   return ids;
 }
