@@ -904,7 +904,8 @@ class FlowSDK:
 
         entries = extract_media_entries(resp)
         media_ids = [e["media_id"] for e in entries]
-        return {"raw": resp, "media_ids": media_ids, "media_entries": entries}
+        workflow_ids = [e.get("workflow_id") for e in entries if e.get("workflow_id")]
+        return {"raw": resp, "media_ids": media_ids, "workflow_ids": workflow_ids, "media_entries": entries}
 
     # ── image refine (edit_image) ──────────────────────────────────────────
     async def edit_image(
@@ -1340,8 +1341,8 @@ def extract_media_entries(resp: Any) -> list[dict[str, Any]]:
                 candidate = gen.get("fifeUrl")
                 if isinstance(candidate, str):
                     url = candidate
-            kind = "video"
-        out.append({"media_id": media_id, "url": url, "mediaType": kind})
+        workflow_id = m.get("workflowId")
+        out.append({"media_id": media_id, "workflow_id": workflow_id, "url": url, "mediaType": kind})
     return out
 
 

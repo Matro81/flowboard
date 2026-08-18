@@ -519,10 +519,10 @@ function CharacterBody({ rfId, data }: { rfId: string; data: FlowboardNodeData }
                 entity_id: data.flowCharacterId,
                 node_id: parseInt(rfId, 10),
                 display_name: displayName,
-                portrait_media_id: portraitMediaId,
-                turnaround_media_id: turnaroundMediaId,
-                voice_name: currentVoiceId,
-                personality_notes: typeof data.aiBrief === "string" ? data.aiBrief : "",
+                portrait_media_id: (data.portraitWorkflowId as string) || portraitMediaId,
+                turnaround_media_id: (data.turnaroundWorkflowId as string) || turnaroundMediaId,
+                voice_name: (data.voiceId as string) || currentVoiceId,
+                personality_notes: (data.prompt as string) || (typeof data.aiBrief === "string" ? data.aiBrief : ""),
               });
               useBoardStore.getState().updateNodeData(rfId, {
                 flowCharacterId: res.entity_id,

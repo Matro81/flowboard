@@ -379,10 +379,17 @@ export const useGenerationStore = create<GenerationState>((set, get) => ({
               }
             }
 
+            const workflowIds =
+              (req.result["workflow_ids"] as (string | null)[] | undefined) ?? [];
+            const workflowId = workflowIds.find(
+              (w): w is string => typeof w === "string" && w.length > 0,
+            );
+
             if (isTurnaround && mediaId) {
               useBoardStore.getState().updateNodeData(rfId, {
                 status: "done",
                 turnaroundMediaId: mediaId,
+                turnaroundWorkflowId: workflowId ?? undefined,
                 turnaroundAspectRatio: opts.aspectRatio,
                 turnaroundStatus: undefined,
                 renderedAt: new Date().toISOString(),
@@ -394,6 +401,7 @@ export const useGenerationStore = create<GenerationState>((set, get) => ({
                   status: "done",
                   data: {
                     turnaroundMediaId: mediaId,
+                    turnaroundWorkflowId: workflowId ?? null,
                     turnaroundAspectRatio: opts.aspectRatio,
                     renderedAt: new Date().toISOString(),
                   },
@@ -404,6 +412,7 @@ export const useGenerationStore = create<GenerationState>((set, get) => ({
                 status: "done",
                 mediaId,
                 portraitMediaId: mediaId,
+                portraitWorkflowId: workflowId ?? undefined,
                 mediaIds,
                 slotErrors: slotErrors ?? undefined,
                 aiBrief: undefined,
@@ -423,6 +432,7 @@ export const useGenerationStore = create<GenerationState>((set, get) => ({
                     prompt: opts.prompt,
                     mediaId,
                     portraitMediaId: mediaId,
+                    portraitWorkflowId: workflowId ?? null,
                     mediaIds,
                     slotErrors: slotErrors ?? null,
                     variantCount: d?.variantCount ?? mediaIds.length,
