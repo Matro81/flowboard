@@ -127,6 +127,55 @@ function edgeFromDto(dto: {
   };
 }
 
+/** Map a NodeDTO from the backend into ReactFlow's Node shape, preserving all
+ * custom fields, character dual-slots, voice IDs, and metadata without dropping keys. */
+function nodeFromDto(n: {
+  id: number;
+  short_id: string;
+  type: NodeType;
+  x: number;
+  y: number;
+  status: NodeStatus;
+  data: Record<string, unknown>;
+}): FlowNode {
+  return {
+    id: String(n.id),
+    type: n.type,
+    position: { x: n.x, y: n.y },
+    data: {
+      ...n.data,
+      type: n.type,
+      shortId: n.short_id,
+      title: (n.data["title"] as string | undefined) ?? TYPE_TITLE[n.type],
+      status: n.status,
+      prompt: n.data["prompt"] as string | undefined,
+      thumbnailUrl: n.data["thumbnailUrl"] as string | undefined,
+      mediaId: n.data["mediaId"] as string | undefined,
+      portraitMediaId:
+        (n.data["portraitMediaId"] as string | undefined) ||
+        (n.data["mediaId"] as string | undefined),
+      turnaroundMediaId: n.data["turnaroundMediaId"] as string | undefined,
+      turnaroundAspectRatio: n.data["turnaroundAspectRatio"] as string | undefined,
+      voiceId: n.data["voiceId"] as string | undefined,
+      voiceGender: n.data["voiceGender"] as string | undefined,
+      voiceLanguage: n.data["voiceLanguage"] as string | undefined,
+      mediaIds: n.data["mediaIds"] as (string | null)[] | undefined,
+      slotErrors: n.data["slotErrors"] as (string | null)[] | undefined,
+      variantCount: n.data["variantCount"] as number | undefined,
+      aspectRatio: n.data["aspectRatio"] as string | undefined,
+      aiBrief: n.data["aiBrief"] as string | undefined,
+      imageModel: n.data["imageModel"] as string | undefined,
+      videoQuality: n.data["videoQuality"] as string | undefined,
+      charCountry: n.data["charCountry"] as string | undefined,
+      charVibe: n.data["charVibe"] as string | undefined,
+      charGender: n.data["charGender"] as string | undefined,
+      storyboardGrid: n.data["storyboardGrid"] as StoryboardGrid | undefined,
+      renderedAt: n.data["renderedAt"] as string | undefined,
+      error: n.data["error"] as string | undefined,
+    },
+  };
+}
+
 // ── Tiny per-node debounce (no external deps) ─────────────────────────────
 const positionTimers = new Map<string, ReturnType<typeof setTimeout>>();
 
@@ -265,33 +314,7 @@ export const useBoardStore = create<BoardState>((set, get) => ({
         boards = [board];
       }
       const detail = await getBoard(board.id);
-
-      const nodes: FlowNode[] = detail.nodes.map((n) => ({
-        id: String(n.id),
-        type: n.type,
-        position: { x: n.x, y: n.y },
-        data: {
-          type: n.type,
-          shortId: n.short_id,
-          title: (n.data["title"] as string | undefined) ?? TYPE_TITLE[n.type],
-          status: n.status,
-          prompt: n.data["prompt"] as string | undefined,
-          thumbnailUrl: n.data["thumbnailUrl"] as string | undefined,
-          mediaId: n.data["mediaId"] as string | undefined,
-          mediaIds: n.data["mediaIds"] as (string | null)[] | undefined,
-          slotErrors: n.data["slotErrors"] as (string | null)[] | undefined,
-          variantCount: n.data["variantCount"] as number | undefined,
-          aspectRatio: n.data["aspectRatio"] as string | undefined,
-          aiBrief: n.data["aiBrief"] as string | undefined,
-          imageModel: n.data["imageModel"] as string | undefined,
-          videoQuality: n.data["videoQuality"] as string | undefined,
-          charCountry: n.data["charCountry"] as string | undefined,
-          charVibe: n.data["charVibe"] as string | undefined,
-          charGender: n.data["charGender"] as string | undefined,
-          storyboardGrid: n.data["storyboardGrid"] as StoryboardGrid | undefined,
-        },
-      }));
-
+      const nodes: FlowNode[] = detail.nodes.map(nodeFromDto);
       const edges: Edge[] = detail.edges.map(edgeFromDto);
 
       set({
@@ -322,31 +345,7 @@ export const useBoardStore = create<BoardState>((set, get) => ({
     set({ loading: true, error: null });
     try {
       const detail = await getBoard(id);
-      const nodes: FlowNode[] = detail.nodes.map((n) => ({
-        id: String(n.id),
-        type: n.type,
-        position: { x: n.x, y: n.y },
-        data: {
-          type: n.type,
-          shortId: n.short_id,
-          title: (n.data["title"] as string | undefined) ?? TYPE_TITLE[n.type],
-          status: n.status,
-          prompt: n.data["prompt"] as string | undefined,
-          thumbnailUrl: n.data["thumbnailUrl"] as string | undefined,
-          mediaId: n.data["mediaId"] as string | undefined,
-          mediaIds: n.data["mediaIds"] as (string | null)[] | undefined,
-          slotErrors: n.data["slotErrors"] as (string | null)[] | undefined,
-          variantCount: n.data["variantCount"] as number | undefined,
-          aspectRatio: n.data["aspectRatio"] as string | undefined,
-          aiBrief: n.data["aiBrief"] as string | undefined,
-          imageModel: n.data["imageModel"] as string | undefined,
-          videoQuality: n.data["videoQuality"] as string | undefined,
-          charCountry: n.data["charCountry"] as string | undefined,
-          charVibe: n.data["charVibe"] as string | undefined,
-          charGender: n.data["charGender"] as string | undefined,
-          storyboardGrid: n.data["storyboardGrid"] as StoryboardGrid | undefined,
-        },
-      }));
+      const nodes: FlowNode[] = detail.nodes.map(nodeFromDto);
       const edges: Edge[] = detail.edges.map(edgeFromDto);
       set({
         boardId: detail.board.id,
@@ -406,31 +405,7 @@ export const useBoardStore = create<BoardState>((set, get) => ({
     if (boardId === null) return;
     try {
       const detail = await getBoard(boardId);
-      const nodes: FlowNode[] = detail.nodes.map((n) => ({
-        id: String(n.id),
-        type: n.type,
-        position: { x: n.x, y: n.y },
-        data: {
-          type: n.type,
-          shortId: n.short_id,
-          title: (n.data["title"] as string | undefined) ?? TYPE_TITLE[n.type],
-          status: n.status,
-          prompt: n.data["prompt"] as string | undefined,
-          thumbnailUrl: n.data["thumbnailUrl"] as string | undefined,
-          mediaId: n.data["mediaId"] as string | undefined,
-          mediaIds: n.data["mediaIds"] as (string | null)[] | undefined,
-          slotErrors: n.data["slotErrors"] as (string | null)[] | undefined,
-          variantCount: n.data["variantCount"] as number | undefined,
-          aiBrief: n.data["aiBrief"] as string | undefined,
-          imageModel: n.data["imageModel"] as string | undefined,
-          videoQuality: n.data["videoQuality"] as string | undefined,
-          charCountry: n.data["charCountry"] as string | undefined,
-          charVibe: n.data["charVibe"] as string | undefined,
-          charGender: n.data["charGender"] as string | undefined,
-          storyboardGrid: n.data["storyboardGrid"] as StoryboardGrid | undefined,
-          error: n.data["error"] as string | undefined,
-        },
-      }));
+      const nodes: FlowNode[] = detail.nodes.map(nodeFromDto);
       const edges: Edge[] = detail.edges.map(edgeFromDto);
       set({ nodes, edges });
     } catch {
