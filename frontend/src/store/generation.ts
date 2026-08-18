@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import { ensureBoardProject, createRequest, getRequest, patchNode } from "../api/client";
+import { ensureBoardProject, createRequest, getRequest, patchNode, syncFlowCharacter } from "../api/client";
 import { useBoardStore } from "./board";
 import { useSettingsStore } from "./settings";
 
@@ -407,6 +407,37 @@ export const useGenerationStore = create<GenerationState>((set, get) => ({
                   },
                 }).catch(() => {});
               }
+
+              // Part 2: Auto-Sync Turnaround (Slot 1) to Google Flow Character
+              const currNode = useBoardStore.getState().nodes.find((x) => x.id === rfId);
+              const d = currNode?.data;
+              const portraitWf =
+                (d?.portraitWorkflowId as string) ||
+                (d?.portraitMediaId as string) ||
+                (d?.mediaId as string);
+              const currentPId = useGenerationStore.getState().projectId;
+              if (currentPId && (workflowId || portraitWf)) {
+                syncFlowCharacter({
+                  project_id: currentPId,
+                  entity_id: (d?.flowCharacterId as string) || undefined,
+                  node_id: isNaN(dbId) ? undefined : dbId,
+                  display_name: (d?.title as string) || "Character",
+                  portrait_media_id: portraitWf,
+                  turnaround_media_id: workflowId || mediaId,
+                  voice_name: (d?.voiceId as string) || undefined,
+                  personality_notes:
+                    (d?.prompt as string) ||
+                    (typeof d?.aiBrief === "string" ? d.aiBrief : ""),
+                })
+                  .then((res) => {
+                    if (res && res.entity_id) {
+                      useBoardStore.getState().updateNodeData(rfId, {
+                        flowCharacterId: res.entity_id,
+                      });
+                    }
+                  })
+                  .catch(() => {});
+              }
             } else {
               useBoardStore.getState().updateNodeData(rfId, {
                 status: "done",
@@ -444,6 +475,36 @@ export const useGenerationStore = create<GenerationState>((set, get) => ({
                     ...(stampedVideoQuality ? { videoQuality: stampedVideoQuality } : {}),
                   },
                 }).catch(() => {});
+
+                // Part 1: Auto-Sync Portrait (Slot 0) to Google Flow Character if character node
+                if (n?.type === "character") {
+                  const currentPId = useGenerationStore.getState().projectId;
+                  if (currentPId) {
+                    syncFlowCharacter({
+                      project_id: currentPId,
+                      entity_id: (d?.flowCharacterId as string) || undefined,
+                      node_id: dbId,
+                      display_name: (d?.title as string) || "Character",
+                      portrait_media_id: workflowId || mediaId,
+                      turnaround_media_id:
+                        (d?.turnaroundWorkflowId as string) ||
+                        (d?.turnaroundMediaId as string) ||
+                        undefined,
+                      voice_name: (d?.voiceId as string) || undefined,
+                      personality_notes:
+                        opts.prompt ||
+                        (typeof d?.aiBrief === "string" ? d.aiBrief : ""),
+                    })
+                      .then((res) => {
+                        if (res && res.entity_id) {
+                          useBoardStore.getState().updateNodeData(rfId, {
+                            flowCharacterId: res.entity_id,
+                          });
+                        }
+                      })
+                      .catch(() => {});
+                  }
+                }
               }
             }
 

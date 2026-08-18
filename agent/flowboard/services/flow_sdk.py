@@ -1036,12 +1036,6 @@ class FlowSDK:
         """
         import uuid as _uuid
         actual_entity_id = entity_id or str(_uuid.uuid4())
-        image_refs: list[dict[str, Any]] = []
-        if portrait_media_id:
-            image_refs.append({"workflowId": portrait_media_id, "mediaId": portrait_media_id})
-        if turnaround_media_id:
-            image_refs.append({"workflowId": turnaround_media_id, "mediaId": turnaround_media_id})
-
         update_fields: list[str] = ["entityInfo.displayName"]
         char_info: dict[str, Any] = {}
 
@@ -1053,8 +1047,7 @@ class FlowSDK:
             char_info["audioReferences"] = [{"presetVoiceId": voice_name}]
             update_fields.append("entityInfo.characterInfo.audioReferences")
 
-        # Note: Google Flow requires imageReferences items to match valid workflow IDs
-        # in the project. If passed, include in char_info.
+        # Slot 0 = Portrait Workflow, Slot 1 = Turnaround 3-angle Workflow
         image_refs: list[dict[str, Any]] = []
         if portrait_media_id:
             image_refs.append({"workflowId": portrait_media_id})

@@ -155,6 +155,32 @@ function CharacterBody({ rfId, data }: { rfId: string; data: FlowboardNodeData }
         },
       }).catch(() => {});
     }
+
+    // Part 3: Auto-Sync Voice to Google Flow Character if entity exists
+    if (voiceId && data.flowCharacterId) {
+      useGenerationStore
+        .getState()
+        .ensureProjectId()
+        .then((projectId) => {
+          if (!projectId) return;
+          syncFlowCharacter({
+            project_id: projectId,
+            entity_id: data.flowCharacterId as string,
+            node_id: isNaN(dbId) ? undefined : dbId,
+            display_name:
+              (typeof data.title === "string" && data.title.trim()) ||
+              "Character",
+            portrait_media_id:
+              (data.portraitWorkflowId as string) || portraitMediaId,
+            turnaround_media_id:
+              (data.turnaroundWorkflowId as string) || turnaroundMediaId,
+            voice_name: voiceId,
+            personality_notes:
+              (data.prompt as string) ||
+              (typeof data.aiBrief === "string" ? data.aiBrief : ""),
+          }).catch(() => {});
+        });
+    }
   }
 
   async function uploadHead(file: File) {
