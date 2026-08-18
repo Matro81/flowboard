@@ -81,6 +81,8 @@ function CharacterBody({ rfId, data }: { rfId: string; data: FlowboardNodeData }
   const [uploadingHead, setUploadingHead] = useState(false);
   const [uploadingBody, setUploadingBody] = useState(false);
   const [generatingTurnaround, setGeneratingTurnaround] = useState(false);
+  const [savingToLib, setSavingToLib] = useState(false);
+  const [savedToLib, setSavedToLib] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [dragOverHead, setDragOverHead] = useState(false);
   const [dragOverBody, setDragOverBody] = useState(false);
@@ -438,25 +440,54 @@ function CharacterBody({ rfId, data }: { rfId: string; data: FlowboardNodeData }
       {portraitMediaId && (
         <button
           type="button"
-          className="character-library-btn"
-          onClick={(e) => {
+          className={`character-library-btn${savingToLib ? " character-library-btn--saving" : ""}${savedToLib ? " character-library-btn--saved" : ""}`}
+          disabled={savingToLib}
+          onClick={async (e) => {
             e.stopPropagation();
-            saveTileToLibrary({
-              mediaId: portraitMediaId,
-              nodeType: data.type,
-              data: {
-                ...data,
-                portraitMediaId,
-                turnaroundMediaId,
-                voiceId: currentVoiceId,
-              },
-            });
+            if (savingToLib) return;
+            setSavingToLib(true);
+            try {
+              const label =
+                typeof data.title === "string" && data.title.trim()
+                  ? data.title.trim()
+                  : typeof data.aiBrief === "string" && data.aiBrief.trim()
+                  ? data.aiBrief.slice(0, 80)
+                  : `#${data.shortId ?? "character"}`;
+              await useReferencesStore.getState().save({
+                media_id: portraitMediaId,
+                kind: "character",
+                ai_brief: typeof data.aiBrief === "string" ? data.aiBrief : null,
+                aspect_ratio: "IMAGE_ASPECT_RATIO_SQUARE",
+                label,
+                source_board_id: useBoardStore.getState().boardId ?? null,
+                source_node_short_id:
+                  typeof data.shortId === "string" ? data.shortId : null,
+              });
+              setSavedToLib(true);
+              setTimeout(() => setSavedToLib(false), 3000);
+            } catch (err) {
+              console.error("Save character to library failed:", err);
+            } finally {
+              setSavingToLib(false);
+            }
           }}
-          title="Lưu nhân vật vào thư viện tham chiếu"
+          title={
+            savedToLib
+              ? "Đã lưu vào Thư viện tham chiếu (Library)"
+              : "Lưu nhân vật vào thư viện tham chiếu (Library)"
+          }
           aria-label="Save to library"
         >
-          <span className="character-library-btn__icon">★</span>
-          <span>Lưu nhân vật vào Library</span>
+          <span className="character-library-btn__icon">
+            {savingToLib ? "◌" : savedToLib ? "✓" : "★"}
+          </span>
+          <span>
+            {savingToLib
+              ? "Đang lưu vào Library..."
+              : savedToLib
+              ? "Đã lưu vào Library"
+              : "Lưu nhân vật vào Library"}
+          </span>
         </button>
       )}
 
