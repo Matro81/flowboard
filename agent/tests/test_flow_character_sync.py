@@ -48,7 +48,7 @@ async def test_sdk_sync_flow_character_entity_existing():
         {"workflowId": "wf-copied-slot-0"},
         {"workflowId": "wf-copied-slot-1"}
     ]
-    assert body["entity"]["entityInfo"]["characterInfo"]["audioReferences"][0]["presetVoiceId"] == "Aoede"
+    assert body["entity"]["entityInfo"]["characterInfo"]["audioReferences"][0]["presetVoiceId"] == "aoede"
 
 
 @pytest.mark.asyncio

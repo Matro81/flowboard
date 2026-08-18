@@ -21,7 +21,7 @@ class FlowVoiceProfile(TypedDict):
 GOOGLE_FLOW_VOICES: list[FlowVoiceProfile] = [
     # ── Nữ (Female Voices) ──
     {
-        "id": "Aoede",
+        "id": "aoede",
         "name": "Aoede",
         "gender": "female",
         "vibe": "Warm & Expressive",
@@ -31,7 +31,7 @@ GOOGLE_FLOW_VOICES: list[FlowVoiceProfile] = [
         "preview_url": None,
     },
     {
-        "id": "Kore",
+        "id": "kore",
         "name": "Kore",
         "gender": "female",
         "vibe": "Gentle & Soothing",
@@ -41,7 +41,7 @@ GOOGLE_FLOW_VOICES: list[FlowVoiceProfile] = [
         "preview_url": None,
     },
     {
-        "id": "Leda",
+        "id": "leda",
         "name": "Leda",
         "gender": "female",
         "vibe": "Confident & Professional",
@@ -51,7 +51,7 @@ GOOGLE_FLOW_VOICES: list[FlowVoiceProfile] = [
         "preview_url": None,
     },
     {
-        "id": "Zephyr",
+        "id": "zephyr",
         "name": "Zephyr",
         "gender": "female",
         "vibe": "Bright & Youthful",
@@ -61,7 +61,7 @@ GOOGLE_FLOW_VOICES: list[FlowVoiceProfile] = [
         "preview_url": None,
     },
     {
-        "id": "Autonoe",
+        "id": "autonoe",
         "name": "Autonoe",
         "gender": "female",
         "vibe": "Soft & Melodic",
@@ -71,7 +71,7 @@ GOOGLE_FLOW_VOICES: list[FlowVoiceProfile] = [
         "preview_url": None,
     },
     {
-        "id": "Callisto",
+        "id": "callisto",
         "name": "Callisto",
         "gender": "female",
         "vibe": "Rich & Elegant",
@@ -81,7 +81,7 @@ GOOGLE_FLOW_VOICES: list[FlowVoiceProfile] = [
         "preview_url": None,
     },
     {
-        "id": "Despina",
+        "id": "despina",
         "name": "Despina",
         "gender": "female",
         "vibe": "Energetic & Spirited",
@@ -91,7 +91,7 @@ GOOGLE_FLOW_VOICES: list[FlowVoiceProfile] = [
         "preview_url": None,
     },
     {
-        "id": "Europa",
+        "id": "europa",
         "name": "Europa",
         "gender": "female",
         "vibe": "Poised & Dynamic",
@@ -101,7 +101,7 @@ GOOGLE_FLOW_VOICES: list[FlowVoiceProfile] = [
         "preview_url": None,
     },
     {
-        "id": "Kalyke",
+        "id": "kalyke",
         "name": "Kalyke",
         "gender": "female",
         "vibe": "Friendly & Breezy",
@@ -111,7 +111,7 @@ GOOGLE_FLOW_VOICES: list[FlowVoiceProfile] = [
         "preview_url": None,
     },
     {
-        "id": "Larissa",
+        "id": "larissa",
         "name": "Larissa",
         "gender": "female",
         "vibe": "Clear & Articulate",
@@ -121,7 +121,7 @@ GOOGLE_FLOW_VOICES: list[FlowVoiceProfile] = [
         "preview_url": None,
     },
     {
-        "id": "Metis",
+        "id": "metis",
         "name": "Metis",
         "gender": "female",
         "vibe": "Wise & Grounded",
@@ -131,7 +131,7 @@ GOOGLE_FLOW_VOICES: list[FlowVoiceProfile] = [
         "preview_url": None,
     },
     {
-        "id": "Pandora",
+        "id": "pandora",
         "name": "Pandora",
         "gender": "female",
         "vibe": "Playful & Imaginative",
@@ -141,7 +141,7 @@ GOOGLE_FLOW_VOICES: list[FlowVoiceProfile] = [
         "preview_url": None,
     },
     {
-        "id": "Thebe",
+        "id": "thebe",
         "name": "Thebe",
         "gender": "female",
         "vibe": "Gentle & Lyrical",
@@ -153,7 +153,7 @@ GOOGLE_FLOW_VOICES: list[FlowVoiceProfile] = [
 
     # ── Nam (Male Voices) ──
     {
-        "id": "Puck",
+        "id": "puck",
         "name": "Puck",
         "gender": "male",
         "vibe": "Playful & Energetic",
@@ -163,7 +163,7 @@ GOOGLE_FLOW_VOICES: list[FlowVoiceProfile] = [
         "preview_url": None,
     },
     {
-        "id": "Charon",
+        "id": "charon",
         "name": "Charon",
         "gender": "male",
         "vibe": "Deep & Resonant",
@@ -173,7 +173,7 @@ GOOGLE_FLOW_VOICES: list[FlowVoiceProfile] = [
         "preview_url": None,
     },
     {
-        "id": "Fenrir",
+        "id": "fenrir",
         "name": "Fenrir",
         "gender": "male",
         "vibe": "Calm & Authoritative",
@@ -183,7 +183,7 @@ GOOGLE_FLOW_VOICES: list[FlowVoiceProfile] = [
         "preview_url": None,
     },
     {
-        "id": "Orpheus",
+        "id": "orpheus",
         "name": "Orpheus",
         "gender": "male",
         "vibe": "Narrative & Dramatic",
@@ -193,7 +193,7 @@ GOOGLE_FLOW_VOICES: list[FlowVoiceProfile] = [
         "preview_url": None,
     },
     {
-        "id": "Achernar",
+        "id": "achernar",
         "name": "Achernar",
         "gender": "male",
         "vibe": "Crisp & Modern",
@@ -203,7 +203,7 @@ GOOGLE_FLOW_VOICES: list[FlowVoiceProfile] = [
         "preview_url": None,
     },
     {
-        "id": "Algenib",
+        "id": "algenib",
         "name": "Algenib",
         "gender": "male",
         "vibe": "Engaging & Confident",
@@ -213,7 +213,7 @@ GOOGLE_FLOW_VOICES: list[FlowVoiceProfile] = [
         "preview_url": None,
     },
     {
-        "id": "Algol",
+        "id": "algol",
         "name": "Algol",
         "gender": "male",
         "vibe": "Robust & Deep",
@@ -223,7 +223,7 @@ GOOGLE_FLOW_VOICES: list[FlowVoiceProfile] = [
         "preview_url": None,
     },
     {
-        "id": "Alnilam",
+        "id": "alnilam",
         "name": "Alnilam",
         "gender": "male",
         "vibe": "Polished & Broadcast",
@@ -233,7 +233,7 @@ GOOGLE_FLOW_VOICES: list[FlowVoiceProfile] = [
         "preview_url": None,
     },
     {
-        "id": "Ganymede",
+        "id": "ganymede",
         "name": "Ganymede",
         "gender": "male",
         "vibe": "Warm & Natural",
@@ -243,7 +243,7 @@ GOOGLE_FLOW_VOICES: list[FlowVoiceProfile] = [
         "preview_url": None,
     },
     {
-        "id": "Io",
+        "id": "io",
         "name": "Io",
         "gender": "male",
         "vibe": "Youthful & Enthusiastic",
@@ -253,7 +253,7 @@ GOOGLE_FLOW_VOICES: list[FlowVoiceProfile] = [
         "preview_url": None,
     },
     {
-        "id": "Titan",
+        "id": "titan",
         "name": "Titan",
         "gender": "male",
         "vibe": "Powerful & Commanding",

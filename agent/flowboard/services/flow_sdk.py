@@ -1109,7 +1109,8 @@ class FlowSDK:
             update_fields.append("entityInfo.characterInfo.personalityNotes")
 
         if voice_name:
-            char_info["audioReferences"] = [{"presetVoiceId": voice_name}]
+            preset_id = str(voice_name).strip().lower()
+            char_info["audioReferences"] = [{"presetVoiceId": preset_id}]
             update_fields.append("entityInfo.characterInfo.audioReferences")
 
         # Step 2: Copy Slot 0 (Portrait) and Slot 1 (Turnaround) into Character Entity
