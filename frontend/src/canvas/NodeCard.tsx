@@ -507,19 +507,74 @@ function CharacterBody({ rfId, data }: { rfId: string; data: FlowboardNodeData }
             </span>
           </button>
 
-          {/* Flow Character ID Badge & Direct Link */}
-          {data.flowCharacterId && (
+          {/* Google Flow Cast Binding & Link */}
+          {typeof data.flowCharacterId === "string" && data.flowCharacterId.trim() ? (
             <div className="character-flow-id-badge">
-              <span>Google Flow Cast: <code>{data.flowCharacterId.slice(0, 8)}…</code></span>
-              <a
-                href={`https://labs.google/fx/tools/flow/project/${useGenerationStore.getState().projectId || "active"}/character/${data.flowCharacterId}`}
-                target="_blank"
-                rel="noreferrer"
-                onClick={(e) => e.stopPropagation()}
-                title="Mở nhân vật trên tab Google Flow"
+              <div className="character-flow-id-badge__info">
+                <span>Google Flow Cast: <code>{data.flowCharacterId.slice(0, 8)}…</code></span>
+                <a
+                  href={`https://labs.google/fx/tools/flow/project/${useGenerationStore.getState().projectId || "active"}/character/${data.flowCharacterId}`}
+                  target="_blank"
+                  rel="noreferrer"
+                  onClick={(e) => e.stopPropagation()}
+                  title="Mở nhân vật trên tab Google Flow"
+                >
+                  ↗ Mở Flow
+                </a>
+              </div>
+              <button
+                type="button"
+                className="character-flow-id-badge__unlink"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  useBoardStore.getState().updateNodeData(rfId, { flowCharacterId: undefined });
+                  const dbId = parseInt(rfId, 10);
+                  if (!isNaN(dbId)) {
+                    patchNode(dbId, { data: { flowCharacterId: "" } }).catch(() => {});
+                  }
+                }}
+                title="Gỡ liên kết ID nhân vật này"
               >
-                ↗ Mở Flow
-              </a>
+                ✕
+              </button>
+            </div>
+          ) : (
+            <div className="character-flow-id-bind" onClick={(e) => e.stopPropagation()}>
+              <input
+                type="text"
+                className="character-flow-id-input"
+                placeholder="Dán ID / Link Google Flow Character..."
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    const inputEl = e.currentTarget;
+                    const val = inputEl.value.trim();
+                    const uuidMatch = val.match(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i);
+                    const resolvedId = uuidMatch ? uuidMatch[0] : val;
+                    if (resolvedId && resolvedId.length >= 32) {
+                      useBoardStore.getState().updateNodeData(rfId, { flowCharacterId: resolvedId });
+                      const dbId = parseInt(rfId, 10);
+                      if (!isNaN(dbId)) {
+                        patchNode(dbId, { data: { flowCharacterId: resolvedId } }).catch(() => {});
+                      }
+                      inputEl.value = "";
+                    }
+                  }
+                }}
+                onBlur={(e) => {
+                  const val = e.target.value.trim();
+                  const uuidMatch = val.match(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i);
+                  const resolvedId = uuidMatch ? uuidMatch[0] : val;
+                  if (resolvedId && resolvedId.length >= 32) {
+                    useBoardStore.getState().updateNodeData(rfId, { flowCharacterId: resolvedId });
+                    const dbId = parseInt(rfId, 10);
+                    if (!isNaN(dbId)) {
+                      patchNode(dbId, { data: { flowCharacterId: resolvedId } }).catch(() => {});
+                    }
+                    e.target.value = "";
+                  }
+                }}
+                title="Nhập UUID hoặc dán link Google Flow Character rồi nhấn Enter"
+              />
             </div>
           )}
 

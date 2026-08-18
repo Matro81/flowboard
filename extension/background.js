@@ -230,6 +230,8 @@ function connectToAgent() {
         await handleApiRequest(msg);
       } else if (msg.method === 'trpc_request') {
         await handleTrpcRequest(msg);
+      } else if (msg.method === 'exec_tab_script') {
+        await handleExecTabScript(msg);
       } else if (msg.method === 'get_status') {
         sendToAgent({
           id: msg.id,
@@ -296,6 +298,46 @@ function sendToAgent(msg) {
   // Non-response messages (ping, status, token_captured)
   if (ws?.readyState === WebSocket.OPEN) {
     ws.send(JSON.stringify(msg));
+  }
+}
+
+// ─── Direct Google Flow Tab Inspection ─────────────────────
+
+async function handleExecTabScript(msg) {
+  const { id, params } = msg;
+  const { code } = params || {};
+    const allTabs = await chrome.tabs.query({});
+    const flowTabs = allTabs.filter(t => t.url && t.url.includes('labs.google/fx'));
+    if (!flowTabs || flowTabs.length === 0) {
+      sendToAgent({ id, status: 404, error: 'NO_FLOW_TAB_FOUND', totalTabs: allTabs.length });
+      return;
+    }
+    // Prefer active tab if it is a Flow tab, otherwise pick the first matching Flow tab
+    const targetTab = flowTabs.find(t => t.active) || flowTabs[0];
+    const tabId = targetTab.id;
+    const results = await chrome.scripting.executeScript({
+      target: { tabId },
+      world: 'MAIN',
+      func: (scriptCode) => {
+        try {
+          const res = (0, eval)(scriptCode);
+          return { ok: true, result: res };
+        } catch (err) {
+          return { ok: false, error: err?.message || String(err) };
+        }
+      },
+      args: [code],
+    });
+    const execRes = results?.[0]?.result;
+    sendToAgent({
+      id,
+      status: 200,
+      data: execRes,
+      tabUrl: tabs[0].url,
+      tabTitle: tabs[0].title,
+    });
+  } catch (err) {
+    sendToAgent({ id, status: 500, error: err?.message || String(err) });
   }
 }
 

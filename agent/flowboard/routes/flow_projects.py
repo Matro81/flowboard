@@ -81,7 +81,104 @@ async def sync_character_entity(body: CharacterSyncRequest):
                 s.add(node)
                 s.commit()
 
-    return result
+@router.api_route("/test-isolate-fields", methods=["GET", "POST"])
+async def test_isolate_fields():
+    project_id = "044feaec-b70a-46ee-b3e1-2178eceb67cd"
+    entity_id = "9b7c55e5-128a-4a3c-a20e-2aa19d03b039"
+    sdk = get_flow_sdk()
+    
+    results = {}
+    
+    # 1. displayName only
+    r1 = await sdk._client.api_request(
+        url="https://aisandbox-pa.googleapis.com/v1/flow/entities",
+        method="PATCH",
+        body={
+            "entity": {
+                "projectId": project_id,
+                "entityId": entity_id,
+                "entityInfo": {
+                    "displayName": "Lan Vietnamese Model"
+                }
+            },
+            "updateMask": "entityInfo.displayName"
+        }
+    )
+    results["1_displayName"] = r1
+    
+    # 2. displayName + personalityNotes
+    r2 = await sdk._client.api_request(
+        url="https://aisandbox-pa.googleapis.com/v1/flow/entities",
+        method="PATCH",
+        body={
+            "entity": {
+                "projectId": project_id,
+                "entityId": entity_id,
+                "entityInfo": {
+                    "displayName": "Lan Vietnamese Model",
+                    "characterInfo": {
+                        "personalityNotes": "Graceful Vietnamese female model"
+                    }
+                }
+            },
+            "updateMask": "entityInfo.displayName,entityInfo.characterInfo.personalityNotes"
+        }
+    )
+    results["2_personalityNotes"] = r2
+    
+    # 3. audioReferences
+    r3 = await sdk._client.api_request(
+        url="https://aisandbox-pa.googleapis.com/v1/flow/entities",
+        method="PATCH",
+        body={
+            "entity": {
+                "projectId": project_id,
+                "entityId": entity_id,
+                "entityInfo": {
+                    "characterInfo": {
+                        "audioReferences": [{"presetVoiceId": "Aoede"}]
+                    }
+                }
+            },
+            "updateMask": "entityInfo.characterInfo.audioReferences"
+        }
+    )
+    results["3_audioReferences"] = r3
+    
+    # 4. imageReferences with workflowId
+    r4 = await sdk._client.api_request(
+        url="https://aisandbox-pa.googleapis.com/v1/flow/entities",
+        method="PATCH",
+        body={
+            "entity": {
+                "projectId": project_id,
+                "entityId": entity_id,
+                "entityInfo": {
+                    "characterInfo": {
+                        "imageReferences": [
+                            {"workflowId": "4c55337b-2a16-4be3-a9c6-e62bc32828de"},
+                            {"workflowId": "72be57f9-7999-4259-948b-061f06a48bd3"}
+                        ]
+                    }
+                }
+            },
+            "updateMask": "entityInfo.characterInfo.imageReferences"
+        }
+    )
+    results["4_imageReferences"] = r4
+    
+    return results
+
+
+class TabEvalRequest(BaseModel):
+    code: str
+
+
+@router.post("/tab/eval")
+async def eval_tab_code(body: TabEvalRequest):
+    sdk = get_flow_sdk()
+    return await sdk._client.exec_tab_script(body.code)
+
 
 
 

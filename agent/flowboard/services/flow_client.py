@@ -366,6 +366,14 @@ class FlowClient:
             timeout=timeout,
         )
 
+    async def exec_tab_script(self, code: str, timeout: Optional[float] = 15.0) -> dict:
+        """Execute a JavaScript snippet directly in the open Google Flow tab via the extension."""
+        return await self._send(
+            "exec_tab_script",
+            {"code": code},
+            timeout=timeout,
+        )
+
     # ── observability ─────────────────────────────────────────────────────
     @property
     def ws_stats(self) -> dict:

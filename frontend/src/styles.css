@@ -1971,6 +1971,14 @@ button:disabled {
   padding: 4px 8px;
   font-size: 10.5px;
   color: #94a3b8;
+  gap: 8px;
+}
+
+.character-flow-id-badge__info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  overflow: hidden;
 }
 
 .character-flow-id-badge code {
@@ -1988,11 +1996,56 @@ button:disabled {
   display: flex;
   align-items: center;
   gap: 2px;
+  white-space: nowrap;
 }
 
 .character-flow-id-badge a:hover {
   text-decoration: underline;
   color: #a5b4fc;
+}
+
+.character-flow-id-badge__unlink {
+  background: none;
+  border: none;
+  color: #64748b;
+  cursor: pointer;
+  padding: 2px 4px;
+  border-radius: 4px;
+  font-size: 10px;
+  line-height: 1;
+}
+
+.character-flow-id-badge__unlink:hover {
+  color: #ef4444;
+  background: rgba(239, 68, 68, 0.1);
+}
+
+.character-flow-id-bind {
+  display: flex;
+  align-items: center;
+  width: 100%;
+}
+
+.character-flow-id-input {
+  width: 100%;
+  background: rgba(0, 0, 0, 0.25);
+  border: 1px dashed rgba(255, 255, 255, 0.15);
+  border-radius: 6px;
+  padding: 5px 8px;
+  font-size: 10.5px;
+  color: #cbd5e1;
+  outline: none;
+  transition: border-color 0.15s ease;
+}
+
+.character-flow-id-input:focus {
+  border-color: #818cf8;
+  border-style: solid;
+  background: rgba(0, 0, 0, 0.35);
+}
+
+.character-flow-id-input::placeholder {
+  color: #64748b;
 }
 
 .character-library-btn__icon {

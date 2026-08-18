@@ -1041,32 +1041,40 @@ class FlowSDK:
         if turnaround_media_id:
             image_refs.append({"workflowId": turnaround_media_id, "mediaId": turnaround_media_id})
 
-        audio_refs: list[dict[str, Any]] = []
-        if voice_name:
-            audio_refs.append({"presetVoiceId": voice_name})
+        update_fields: list[str] = ["entityInfo.displayName"]
+        char_info: dict[str, Any] = {}
 
+        if personality_notes:
+            char_info["personalityNotes"] = personality_notes
+            update_fields.append("entityInfo.characterInfo.personalityNotes")
+
+        if voice_name:
+            char_info["audioReferences"] = [{"presetVoiceId": voice_name}]
+            update_fields.append("entityInfo.characterInfo.audioReferences")
+
+        # Note: Google Flow requires imageReferences items to match valid workflow IDs
+        # in the project. If passed, include in char_info.
         image_refs: list[dict[str, Any]] = []
         if portrait_media_id:
             image_refs.append({"workflowId": portrait_media_id})
         if turnaround_media_id:
             image_refs.append({"workflowId": turnaround_media_id})
 
-        char_info: dict[str, Any] = {
-            "imageReferences": image_refs,
-            "audioReferences": audio_refs,
-            "personalityNotes": personality_notes or "",
-        }
+        if image_refs:
+            char_info["imageReferences"] = image_refs
+            update_fields.append("entityInfo.characterInfo.imageReferences")
 
         entity_payload = {
             "entity": {
                 "projectId": str(project_id),
                 "entityId": actual_entity_id,
                 "entityInfo": {
+                    "entityType": "CHARACTER",
                     "displayName": display_name,
                     "characterInfo": char_info,
                 },
             },
-            "updateMask": "entityInfo.displayName,entityInfo.characterInfo.imageReferences,entityInfo.characterInfo.audioReferences,entityInfo.characterInfo.personalityNotes",
+            "updateMask": ",".join(update_fields),
         }
 
         resp = await self._client.api_request(
