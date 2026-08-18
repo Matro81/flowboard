@@ -10,6 +10,7 @@ import {
   uploadImageFromUrl,
   listFlowVoices,
   getTurnaroundPrompt,
+  syncFlowCharacter,
   type FlowVoice,
 } from "../api/client";
 import { requestAutoBrief } from "../api/autoBrief";
@@ -83,6 +84,8 @@ function CharacterBody({ rfId, data }: { rfId: string; data: FlowboardNodeData }
   const [generatingTurnaround, setGeneratingTurnaround] = useState(false);
   const [savingToLib, setSavingToLib] = useState(false);
   const [savedToLib, setSavedToLib] = useState(false);
+  const [syncingFlow, setSyncingFlow] = useState(false);
+  const [syncedFlow, setSyncedFlow] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [dragOverHead, setDragOverHead] = useState(false);
   const [dragOverBody, setDragOverBody] = useState(false);
@@ -438,57 +441,141 @@ function CharacterBody({ rfId, data }: { rfId: string; data: FlowboardNodeData }
       <BriefHint data={data} />
 
       {portraitMediaId && (
-        <button
-          type="button"
-          className={`character-library-btn${savingToLib ? " character-library-btn--saving" : ""}${savedToLib ? " character-library-btn--saved" : ""}`}
-          disabled={savingToLib}
-          onClick={async (e) => {
-            e.stopPropagation();
-            if (savingToLib) return;
-            setSavingToLib(true);
-            try {
-              const label =
-                typeof data.title === "string" && data.title.trim()
-                  ? data.title.trim()
-                  : typeof data.aiBrief === "string" && data.aiBrief.trim()
-                  ? data.aiBrief.slice(0, 80)
-                  : `#${data.shortId ?? "character"}`;
-              await useReferencesStore.getState().save({
-                media_id: portraitMediaId,
-                kind: "character",
-                ai_brief: typeof data.aiBrief === "string" ? data.aiBrief : null,
-                aspect_ratio: "IMAGE_ASPECT_RATIO_SQUARE",
-                label,
-                source_board_id: useBoardStore.getState().boardId ?? null,
-                source_node_short_id:
-                  typeof data.shortId === "string" ? data.shortId : null,
-              });
-              setSavedToLib(true);
-              setTimeout(() => setSavedToLib(false), 3000);
-            } catch (err) {
-              console.error("Save character to library failed:", err);
-            } finally {
-              setSavingToLib(false);
+        <div className="character-actions">
+          {/* Sync to Google Flow Cast Entity */}
+          <button
+            type="button"
+            className={`character-sync-btn${syncingFlow ? " character-sync-btn--saving" : ""}${syncedFlow ? " character-sync-btn--saved" : ""}`}
+            disabled={syncingFlow}
+            onClick={async (e) => {
+              e.stopPropagation();
+              if (syncingFlow) return;
+              setSyncingFlow(true);
+              setError(null);
+              try {
+                const projectId = await useGenerationStore.getState().ensureProjectId();
+                if (!projectId) {
+                  throw new Error("Chưa kết nối dự án Google Flow. Vui lòng mở Account Panel.");
+                }
+                const displayName =
+                  typeof data.title === "string" && data.title.trim()
+                    ? data.title.trim()
+                    : "Character";
+                const res = await syncFlowCharacter({
+                  project_id: projectId,
+                  entity_id: data.flowCharacterId,
+                  node_id: parseInt(rfId, 10),
+                  display_name: displayName,
+                  portrait_media_id: portraitMediaId,
+                  turnaround_media_id: turnaroundMediaId,
+                  voice_name: currentVoiceId,
+                  personality_notes: typeof data.aiBrief === "string" ? data.aiBrief : "",
+                });
+                useBoardStore.getState().updateNodeData(rfId, {
+                  flowCharacterId: res.entity_id,
+                });
+                const dbId = parseInt(rfId, 10);
+                if (!isNaN(dbId)) {
+                  patchNode(dbId, {
+                    data: { flowCharacterId: res.entity_id },
+                  }).catch(() => {});
+                }
+                setSyncedFlow(true);
+                setTimeout(() => setSyncedFlow(false), 4000);
+              } catch (err) {
+                setError(err instanceof Error ? err.message : String(err));
+              } finally {
+                setSyncingFlow(false);
+              }
+            }}
+            title={
+              syncedFlow
+                ? "Đã đồng bộ sang Google Flow Cast!"
+                : "Đồng bộ ảnh chân dung, 3 góc máy và Voice sang đối tượng Google Flow Character"
             }
-          }}
-          title={
-            savedToLib
-              ? "Đã lưu vào Thư viện tham chiếu (Library)"
-              : "Lưu nhân vật vào thư viện tham chiếu (Library)"
-          }
-          aria-label="Save to library"
-        >
-          <span className="character-library-btn__icon">
-            {savingToLib ? "◌" : savedToLib ? "✓" : "★"}
-          </span>
-          <span>
-            {savingToLib
-              ? "Đang lưu vào Library..."
-              : savedToLib
-              ? "Đã lưu vào Library"
-              : "Lưu nhân vật vào Library"}
-          </span>
-        </button>
+            aria-label="Sync to Google Flow"
+          >
+            <span className="character-sync-btn__icon">
+              {syncingFlow ? "◌" : syncedFlow ? "✓" : "⚡"}
+            </span>
+            <span>
+              {syncingFlow
+                ? "Đang đồng bộ Google Flow..."
+                : syncedFlow
+                ? "✓ Đã đồng bộ sang Google Flow"
+                : "Đồng bộ sang Google Flow"}
+            </span>
+          </button>
+
+          {/* Flow Character ID Badge & Direct Link */}
+          {data.flowCharacterId && (
+            <div className="character-flow-id-badge">
+              <span>Google Flow Cast: <code>{data.flowCharacterId.slice(0, 8)}…</code></span>
+              <a
+                href={`https://labs.google/fx/tools/flow/project/${useGenerationStore.getState().projectId || "active"}/character/${data.flowCharacterId}`}
+                target="_blank"
+                rel="noreferrer"
+                onClick={(e) => e.stopPropagation()}
+                title="Mở nhân vật trên tab Google Flow"
+              >
+                ↗ Mở Flow
+              </a>
+            </div>
+          )}
+
+          {/* Save to local Reference Library */}
+          <button
+            type="button"
+            className={`character-library-btn${savingToLib ? " character-library-btn--saving" : ""}${savedToLib ? " character-library-btn--saved" : ""}`}
+            disabled={savingToLib}
+            onClick={async (e) => {
+              e.stopPropagation();
+              if (savingToLib) return;
+              setSavingToLib(true);
+              try {
+                const label =
+                  typeof data.title === "string" && data.title.trim()
+                    ? data.title.trim()
+                    : typeof data.aiBrief === "string" && data.aiBrief.trim()
+                    ? data.aiBrief.slice(0, 80)
+                    : `#${data.shortId ?? "character"}`;
+                await useReferencesStore.getState().save({
+                  media_id: portraitMediaId,
+                  kind: "character",
+                  ai_brief: typeof data.aiBrief === "string" ? data.aiBrief : null,
+                  aspect_ratio: "IMAGE_ASPECT_RATIO_SQUARE",
+                  label,
+                  source_board_id: useBoardStore.getState().boardId ?? null,
+                  source_node_short_id:
+                    typeof data.shortId === "string" ? data.shortId : null,
+                });
+                setSavedToLib(true);
+                setTimeout(() => setSavedToLib(false), 3000);
+              } catch (err) {
+                console.error("Save character to library failed:", err);
+              } finally {
+                setSavingToLib(false);
+              }
+            }}
+            title={
+              savedToLib
+                ? "Đã lưu vào Thư viện tham chiếu (Library)"
+                : "Lưu nhân vật vào thư viện tham chiếu (Library)"
+            }
+            aria-label="Save to library"
+          >
+            <span className="character-library-btn__icon">
+              {savingToLib ? "◌" : savedToLib ? "✓" : "★"}
+            </span>
+            <span>
+              {savingToLib
+                ? "Đang lưu vào Library..."
+                : savedToLib
+                ? "Đã lưu vào Library"
+                : "Lưu vào Reference Library"}
+            </span>
+          </button>
+        </div>
       )}
 
       {error && (

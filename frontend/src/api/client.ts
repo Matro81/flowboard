@@ -942,3 +942,30 @@ export function getTurnaroundPrompt(params: {
   });
 }
 
+export interface CharacterSyncPayload {
+  project_id: string;
+  entity_id?: string;
+  node_id?: number;
+  display_name?: string;
+  portrait_media_id?: string;
+  turnaround_media_id?: string;
+  voice_name?: string;
+  personality_notes?: string;
+}
+
+export interface CharacterSyncResult {
+  entity_id: string;
+  project_id: string;
+  display_name: string;
+  url: string;
+}
+
+export function syncFlowCharacter(
+  payload: CharacterSyncPayload,
+): Promise<CharacterSyncResult> {
+  return api<CharacterSyncResult>("/api/flow/projects/characters/sync", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+

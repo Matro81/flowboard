@@ -33,6 +33,7 @@ VIDEO_I2V_URL = f"{FLOW_API_BASE}/v1/video:batchAsyncGenerateVideoStartImage"
 VIDEO_OMNI_URL = f"{FLOW_API_BASE}/v1/video:batchAsyncGenerateVideoReferenceImages"
 VIDEO_POLL_URL = f"{FLOW_API_BASE}/v1/video:batchCheckAsyncVideoGenerationStatus"
 UPLOAD_IMAGE_URL = f"{FLOW_API_BASE}/v1/flow/uploadImage"
+ENTITIES_URL = f"{FLOW_API_BASE}/v1/flow/entities"
 
 
 # Omni Flash — variable-duration r2v video model. Each duration maps to a
@@ -1017,6 +1018,67 @@ class FlowSDK:
             )
             return {"raw": resp, "error": "no_media_id_in_upload_response"}
         return {"raw": resp, "media_id": media_id}
+
+    # ── Character Entity Sync (Google Flow Cast) ───────────────────────────
+    async def sync_flow_character_entity(
+        self,
+        project_id: str,
+        entity_id: Optional[str] = None,
+        display_name: str = "Character",
+        portrait_media_id: Optional[str] = None,
+        turnaround_media_id: Optional[str] = None,
+        voice_name: Optional[str] = None,
+        personality_notes: Optional[str] = None,
+    ) -> dict[str, Any]:
+        """Sync or create a character Entity on Google Flow (`/v1/flow/entities`).
+        Attaches portrait and turnaround image workflows and audio voice reference.
+        """
+        import uuid as _uuid
+        actual_entity_id = entity_id or str(_uuid.uuid4())
+        image_refs: list[dict[str, Any]] = []
+        if portrait_media_id:
+            image_refs.append({"workflowId": portrait_media_id, "mediaId": portrait_media_id})
+        if turnaround_media_id:
+            image_refs.append({"workflowId": turnaround_media_id, "mediaId": turnaround_media_id})
+
+        audio_refs: list[dict[str, Any]] = []
+        if voice_name:
+            audio_refs.append({"voiceName": voice_name})
+
+        char_info: dict[str, Any] = {
+            "imageReferences": image_refs,
+            "audioReferences": audio_refs,
+            "personalityNotes": personality_notes or "",
+        }
+
+        entity_payload = {
+            "entity": {
+                "projectId": str(project_id),
+                "entityId": actual_entity_id,
+                "entityInfo": {
+                    "displayName": display_name,
+                    "characterInfo": char_info,
+                },
+            },
+            "updateMask": "entityInfo.displayName,entityInfo.characterInfo.imageReferences,entityInfo.characterInfo.audioReferences,entityInfo.characterInfo.personalityNotes",
+        }
+
+        resp = await self._client.api_request(
+            url=ENTITIES_URL,
+            method="PATCH",
+            headers=dict(_API_HEADERS),
+            body=entity_payload,
+        )
+        if isinstance(resp, dict) and resp.get("error"):
+            return {"raw": resp, "error": resp["error"]}
+
+        return {
+            "raw": resp,
+            "entity_id": actual_entity_id,
+            "project_id": str(project_id),
+            "display_name": display_name,
+            "url": f"https://labs.google/fx/tools/flow/project/{project_id}/character/{actual_entity_id}",
+        }
 
 
 def _extract_project_id(resp: Any) -> Optional[str]:

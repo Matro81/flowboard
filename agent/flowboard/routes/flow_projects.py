@@ -24,6 +24,7 @@ import logging
 from typing import Optional
 
 from fastapi import APIRouter, HTTPException
+from pydantic import BaseModel
 
 from flowboard.db import get_session
 from flowboard.db.models import Board, BoardFlowProject
@@ -32,6 +33,55 @@ from flowboard.services.flow_sdk import get_flow_sdk, is_valid_project_id
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/flow/projects", tags=["flow-projects"])
+
+
+class CharacterSyncRequest(BaseModel):
+    project_id: str
+    entity_id: Optional[str] = None
+    node_id: Optional[int] = None
+    display_name: str = "Character"
+    portrait_media_id: Optional[str] = None
+    turnaround_media_id: Optional[str] = None
+    voice_name: Optional[str] = None
+    personality_notes: Optional[str] = None
+
+
+@router.post("/characters/sync")
+async def sync_character_entity(body: CharacterSyncRequest):
+    """Sync a Flowboard character node to a Google Flow Entity (`/v1/flow/entities`).
+    Returns the entity_id, project_id, and direct Google Flow web URL.
+    Optionally persists `flowCharacterId` into the local Node row.
+    """
+    sdk = get_flow_sdk()
+    result = await sdk.sync_flow_character_entity(
+        project_id=body.project_id,
+        entity_id=body.entity_id,
+        display_name=body.display_name,
+        portrait_media_id=body.portrait_media_id,
+        turnaround_media_id=body.turnaround_media_id,
+        voice_name=body.voice_name,
+        personality_notes=body.personality_notes,
+    )
+    if result.get("error"):
+        raise HTTPException(
+            status_code=502,
+            detail={"message": result["error"]},
+        )
+
+    # If node_id provided, persist flowCharacterId to node.data
+    entity_id = result.get("entity_id")
+    if body.node_id is not None and entity_id:
+        from flowboard.db.models import Node
+        with get_session() as s:
+            node = s.get(Node, body.node_id)
+            if node is not None:
+                data = dict(node.data or {})
+                data["flowCharacterId"] = entity_id
+                node.data = data
+                s.add(node)
+                s.commit()
+
+    return result
 
 
 async def _resolve_remote_ids(tool: str) -> set[str]:

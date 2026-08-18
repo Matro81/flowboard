@@ -63,6 +63,7 @@ export interface FlowboardNodeData extends Record<string, unknown> {
   // Character Google Flow Dual-Asset and Voice bindings
   portraitMediaId?: string;
   turnaroundMediaId?: string;
+  flowCharacterId?: string;
   voiceId?: string;
   voiceGender?: string;
   voiceLanguage?: string;
@@ -156,6 +157,7 @@ function nodeFromDto(n: {
         (n.data["mediaId"] as string | undefined),
       turnaroundMediaId: n.data["turnaroundMediaId"] as string | undefined,
       turnaroundAspectRatio: n.data["turnaroundAspectRatio"] as string | undefined,
+      flowCharacterId: n.data["flowCharacterId"] as string | undefined,
       voiceId: n.data["voiceId"] as string | undefined,
       voiceGender: n.data["voiceGender"] as string | undefined,
       voiceLanguage: n.data["voiceLanguage"] as string | undefined,

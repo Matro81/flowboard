@@ -309,6 +309,7 @@ def _collect_upstream(node_id: int) -> tuple[list[dict], Optional[Node]]:
                     "brief": brief if isinstance(brief, str) else None,
                     "prompt": user_prompt,
                     "title": data.get("title") if isinstance(data.get("title"), str) else None,
+                    "flow_character_id": data.get("flowCharacterId") if isinstance(data.get("flowCharacterId"), str) else None,
                     "has_media": has_media,
                     "subject_chars": subject_chars,
                 }
