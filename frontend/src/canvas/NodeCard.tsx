@@ -440,128 +440,48 @@ function CharacterBody({ rfId, data }: { rfId: string; data: FlowboardNodeData }
 
       <BriefHint data={data} />
 
-      {portraitMediaId && (
-        <div className="character-actions">
-          {/* Sync to Google Flow Cast Entity */}
-          <button
-            type="button"
-            className={`character-sync-btn${syncingFlow ? " character-sync-btn--saving" : ""}${syncedFlow ? " character-sync-btn--saved" : ""}`}
-            disabled={syncingFlow}
-            onClick={async (e) => {
-              e.stopPropagation();
-              if (syncingFlow) return;
-              setSyncingFlow(true);
-              setError(null);
-              try {
-                const projectId = await useGenerationStore.getState().ensureProjectId();
-                if (!projectId) {
-                  throw new Error("Chưa kết nối dự án Google Flow. Vui lòng mở Account Panel.");
-                }
-                const displayName =
-                  typeof data.title === "string" && data.title.trim()
-                    ? data.title.trim()
-                    : "Character";
-                const res = await syncFlowCharacter({
-                  project_id: projectId,
-                  entity_id: data.flowCharacterId,
-                  node_id: parseInt(rfId, 10),
-                  display_name: displayName,
-                  portrait_media_id: portraitMediaId,
-                  turnaround_media_id: turnaroundMediaId,
-                  voice_name: currentVoiceId,
-                  personality_notes: typeof data.aiBrief === "string" ? data.aiBrief : "",
-                });
-                useBoardStore.getState().updateNodeData(rfId, {
-                  flowCharacterId: res.entity_id,
-                });
+      <div className="character-actions">
+        {/* Google Flow Cast Binding & Link */}
+        {typeof data.flowCharacterId === "string" && data.flowCharacterId.trim() ? (
+          <div className="character-flow-id-badge">
+            <div className="character-flow-id-badge__info">
+              <span>Google Flow Cast: <code>{data.flowCharacterId.slice(0, 8)}…</code></span>
+              <a
+                href={`https://labs.google/fx/tools/flow/project/${useGenerationStore.getState().projectId || "active"}/character/${data.flowCharacterId}`}
+                target="_blank"
+                rel="noreferrer"
+                onClick={(e) => e.stopPropagation()}
+                title="Mở nhân vật trên tab Google Flow"
+              >
+                ↗ Mở Flow
+              </a>
+            </div>
+            <button
+              type="button"
+              className="character-flow-id-badge__unlink"
+              onClick={(e) => {
+                e.stopPropagation();
+                useBoardStore.getState().updateNodeData(rfId, { flowCharacterId: undefined });
                 const dbId = parseInt(rfId, 10);
                 if (!isNaN(dbId)) {
-                  patchNode(dbId, {
-                    data: { flowCharacterId: res.entity_id },
-                  }).catch(() => {});
+                  patchNode(dbId, { data: { flowCharacterId: "" } }).catch(() => {});
                 }
-                setSyncedFlow(true);
-                setTimeout(() => setSyncedFlow(false), 4000);
-              } catch (err) {
-                setError(err instanceof Error ? err.message : String(err));
-              } finally {
-                setSyncingFlow(false);
-              }
-            }}
-            title={
-              syncedFlow
-                ? "Đã đồng bộ sang Google Flow Cast!"
-                : "Đồng bộ ảnh chân dung, 3 góc máy và Voice sang đối tượng Google Flow Character"
-            }
-            aria-label="Sync to Google Flow"
-          >
-            <span className="character-sync-btn__icon">
-              {syncingFlow ? "◌" : syncedFlow ? "✓" : "⚡"}
-            </span>
-            <span>
-              {syncingFlow
-                ? "Đang đồng bộ Google Flow..."
-                : syncedFlow
-                ? "✓ Đã đồng bộ sang Google Flow"
-                : "Đồng bộ sang Google Flow"}
-            </span>
-          </button>
-
-          {/* Google Flow Cast Binding & Link */}
-          {typeof data.flowCharacterId === "string" && data.flowCharacterId.trim() ? (
-            <div className="character-flow-id-badge">
-              <div className="character-flow-id-badge__info">
-                <span>Google Flow Cast: <code>{data.flowCharacterId.slice(0, 8)}…</code></span>
-                <a
-                  href={`https://labs.google/fx/tools/flow/project/${useGenerationStore.getState().projectId || "active"}/character/${data.flowCharacterId}`}
-                  target="_blank"
-                  rel="noreferrer"
-                  onClick={(e) => e.stopPropagation()}
-                  title="Mở nhân vật trên tab Google Flow"
-                >
-                  ↗ Mở Flow
-                </a>
-              </div>
-              <button
-                type="button"
-                className="character-flow-id-badge__unlink"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  useBoardStore.getState().updateNodeData(rfId, { flowCharacterId: undefined });
-                  const dbId = parseInt(rfId, 10);
-                  if (!isNaN(dbId)) {
-                    patchNode(dbId, { data: { flowCharacterId: "" } }).catch(() => {});
-                  }
-                }}
-                title="Gỡ liên kết ID nhân vật này"
-              >
-                ✕
-              </button>
-            </div>
-          ) : (
-            <div className="character-flow-id-bind" onClick={(e) => e.stopPropagation()}>
-              <input
-                type="text"
-                className="character-flow-id-input"
-                placeholder="Dán ID / Link Google Flow Character..."
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") {
-                    const inputEl = e.currentTarget;
-                    const val = inputEl.value.trim();
-                    const uuidMatch = val.match(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i);
-                    const resolvedId = uuidMatch ? uuidMatch[0] : val;
-                    if (resolvedId && resolvedId.length >= 32) {
-                      useBoardStore.getState().updateNodeData(rfId, { flowCharacterId: resolvedId });
-                      const dbId = parseInt(rfId, 10);
-                      if (!isNaN(dbId)) {
-                        patchNode(dbId, { data: { flowCharacterId: resolvedId } }).catch(() => {});
-                      }
-                      inputEl.value = "";
-                    }
-                  }
-                }}
-                onBlur={(e) => {
-                  const val = e.target.value.trim();
+              }}
+              title="Gỡ liên kết ID nhân vật này"
+            >
+              ✕
+            </button>
+          </div>
+        ) : (
+          <div className="character-flow-id-bind" onClick={(e) => e.stopPropagation()}>
+            <input
+              type="text"
+              className="character-flow-id-input"
+              placeholder="Dán ID / Link Google Flow Character..."
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  const inputEl = e.currentTarget;
+                  const val = inputEl.value.trim();
                   const uuidMatch = val.match(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i);
                   const resolvedId = uuidMatch ? uuidMatch[0] : val;
                   if (resolvedId && resolvedId.length >= 32) {
@@ -570,15 +490,95 @@ function CharacterBody({ rfId, data }: { rfId: string; data: FlowboardNodeData }
                     if (!isNaN(dbId)) {
                       patchNode(dbId, { data: { flowCharacterId: resolvedId } }).catch(() => {});
                     }
-                    e.target.value = "";
+                    inputEl.value = "";
                   }
-                }}
-                title="Nhập UUID hoặc dán link Google Flow Character rồi nhấn Enter"
-              />
-            </div>
-          )}
+                }
+              }}
+              onBlur={(e) => {
+                const val = e.target.value.trim();
+                const uuidMatch = val.match(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i);
+                const resolvedId = uuidMatch ? uuidMatch[0] : val;
+                if (resolvedId && resolvedId.length >= 32) {
+                  useBoardStore.getState().updateNodeData(rfId, { flowCharacterId: resolvedId });
+                  const dbId = parseInt(rfId, 10);
+                  if (!isNaN(dbId)) {
+                    patchNode(dbId, { data: { flowCharacterId: resolvedId } }).catch(() => {});
+                  }
+                  e.target.value = "";
+                }
+              }}
+              title="Nhập UUID hoặc dán link Google Flow Character rồi nhấn Enter"
+            />
+          </div>
+        )}
 
-          {/* Save to local Reference Library */}
+        {/* Sync to Google Flow Cast Entity */}
+        <button
+          type="button"
+          className={`character-sync-btn${syncingFlow ? " character-sync-btn--saving" : ""}${syncedFlow ? " character-sync-btn--saved" : ""}`}
+          disabled={syncingFlow}
+          onClick={async (e) => {
+            e.stopPropagation();
+            if (syncingFlow) return;
+            setSyncingFlow(true);
+            setError(null);
+            try {
+              const projectId = await useGenerationStore.getState().ensureProjectId();
+              if (!projectId) {
+                throw new Error("Chưa kết nối dự án Google Flow. Vui lòng mở Account Panel.");
+              }
+              const displayName =
+                typeof data.title === "string" && data.title.trim()
+                  ? data.title.trim()
+                  : "Character";
+              const res = await syncFlowCharacter({
+                project_id: projectId,
+                entity_id: data.flowCharacterId,
+                node_id: parseInt(rfId, 10),
+                display_name: displayName,
+                portrait_media_id: portraitMediaId,
+                turnaround_media_id: turnaroundMediaId,
+                voice_name: currentVoiceId,
+                personality_notes: typeof data.aiBrief === "string" ? data.aiBrief : "",
+              });
+              useBoardStore.getState().updateNodeData(rfId, {
+                flowCharacterId: res.entity_id,
+              });
+              const dbId = parseInt(rfId, 10);
+              if (!isNaN(dbId)) {
+                patchNode(dbId, {
+                  data: { flowCharacterId: res.entity_id },
+                }).catch(() => {});
+              }
+              setSyncedFlow(true);
+              setTimeout(() => setSyncedFlow(false), 4000);
+            } catch (err) {
+              setError(err instanceof Error ? err.message : String(err));
+            } finally {
+              setSyncingFlow(false);
+            }
+          }}
+          title={
+            syncedFlow
+              ? "Đã đồng bộ sang Google Flow Cast!"
+              : "Đồng bộ Tên, Giọng nói và Personality sang đối tượng Google Flow Character"
+          }
+          aria-label="Sync to Google Flow"
+        >
+          <span className="character-sync-btn__icon">
+            {syncingFlow ? "◌" : syncedFlow ? "✓" : "⚡"}
+          </span>
+          <span>
+            {syncingFlow
+              ? "Đang đồng bộ Google Flow..."
+              : syncedFlow
+              ? "✓ Đã đồng bộ sang Google Flow"
+              : "Đồng bộ sang Google Flow"}
+          </span>
+        </button>
+
+        {/* Save to local Reference Library */}
+        {portraitMediaId && (
           <button
             type="button"
             className={`character-library-btn${savingToLib ? " character-library-btn--saving" : ""}${savedToLib ? " character-library-btn--saved" : ""}`}
@@ -598,26 +598,20 @@ function CharacterBody({ rfId, data }: { rfId: string; data: FlowboardNodeData }
                   media_id: portraitMediaId,
                   kind: "character",
                   ai_brief: typeof data.aiBrief === "string" ? data.aiBrief : null,
-                  aspect_ratio: "IMAGE_ASPECT_RATIO_SQUARE",
                   label,
                   source_board_id: useBoardStore.getState().boardId ?? null,
-                  source_node_short_id:
-                    typeof data.shortId === "string" ? data.shortId : null,
+                  source_node_short_id: typeof data.shortId === "string" ? data.shortId : null,
                 });
                 setSavedToLib(true);
                 setTimeout(() => setSavedToLib(false), 3000);
-              } catch (err) {
-                console.error("Save character to library failed:", err);
+              } catch {
+                /* non-fatal */
               } finally {
                 setSavingToLib(false);
               }
             }}
-            title={
-              savedToLib
-                ? "Đã lưu vào Thư viện tham chiếu (Library)"
-                : "Lưu nhân vật vào thư viện tham chiếu (Library)"
-            }
-            aria-label="Save to library"
+            title={savedToLib ? "Đã lưu vào Library!" : "Lưu ảnh chân dung nhân vật này vào Reference Library"}
+            aria-label="Save to Reference Library"
           >
             <span className="character-library-btn__icon">
               {savingToLib ? "◌" : savedToLib ? "✓" : "★"}
@@ -630,8 +624,8 @@ function CharacterBody({ rfId, data }: { rfId: string; data: FlowboardNodeData }
                 : "Lưu vào Reference Library"}
             </span>
           </button>
-        </div>
-      )}
+        )}
+      </div>
 
       {error && (
         <p className="character-drop__error" role="alert">
