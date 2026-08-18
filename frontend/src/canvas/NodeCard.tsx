@@ -247,10 +247,73 @@ function CharacterBody({ rfId, data }: { rfId: string; data: FlowboardNodeData }
     });
   }
 
+  function clearPortrait(e?: React.MouseEvent) {
+    if (e) e.stopPropagation();
+    useBoardStore.getState().updateNodeData(rfId, {
+      mediaId: undefined,
+      portraitMediaId: undefined,
+      portraitWorkflowId: undefined,
+      aiBrief: undefined,
+      status: "idle",
+    });
+    const dbId = parseInt(rfId, 10);
+    if (!isNaN(dbId)) {
+      patchNode(dbId, {
+        status: "idle",
+        data: {
+          mediaId: null,
+          portraitMediaId: null,
+          portraitWorkflowId: null,
+          aiBrief: null,
+        },
+      }).catch(() => {});
+    }
+  }
+
+  function clearTurnaround(e?: React.MouseEvent) {
+    if (e) e.stopPropagation();
+    useBoardStore.getState().updateNodeData(rfId, {
+      turnaroundMediaId: undefined,
+      turnaroundWorkflowId: undefined,
+      turnaroundAspectRatio: undefined,
+    });
+    const dbId = parseInt(rfId, 10);
+    if (!isNaN(dbId)) {
+      patchNode(dbId, {
+        data: {
+          turnaroundMediaId: null,
+          turnaroundWorkflowId: null,
+          turnaroundAspectRatio: null,
+        },
+      }).catch(() => {});
+    }
+  }
+
   const selectedVoice = voices.find((v) => v.id === currentVoiceId);
 
   return (
     <div className="node-body node-body--character">
+      {/* ── Character Name Input ── */}
+      <div className="character-name-section">
+        <label className="character-name-label">
+          <span className="character-name-icon">👤</span> Tên nhân vật
+        </label>
+        <input
+          type="text"
+          className="character-name-input"
+          value={typeof data.title === "string" ? data.title : ""}
+          placeholder="Ví dụ: Hoa Mai, Lan Anh..."
+          onChange={(e) => {
+            const newTitle = e.target.value;
+            useBoardStore.getState().updateNodeData(rfId, { title: newTitle });
+            const dbId = parseInt(rfId, 10);
+            if (!isNaN(dbId)) {
+              patchNode(dbId, { data: { title: newTitle } }).catch(() => {});
+            }
+          }}
+        />
+      </div>
+
       {/* ── Dual-Asset Grid: Headshot + 3-Angle Turnaround ── */}
       <div className="character-dual-grid">
         {/* Slot 1: Headshot */}
@@ -295,6 +358,14 @@ function CharacterBody({ rfId, data }: { rfId: string; data: FlowboardNodeData }
                 src={mediaUrl(portraitMediaId)}
                 alt="Chân dung khuôn mặt"
               />
+              <button
+                type="button"
+                className="character-slot__clear-btn"
+                onClick={clearPortrait}
+                title="Xóa ảnh khuôn mặt này"
+              >
+                ✕
+              </button>
               <div className="character-slot__hover-overlay">
                 <span>Thay ảnh</span>
               </div>
@@ -381,6 +452,14 @@ function CharacterBody({ rfId, data }: { rfId: string; data: FlowboardNodeData }
                 src={mediaUrl(turnaroundMediaId)}
                 alt="Toàn thân 3 góc máy"
               />
+              <button
+                type="button"
+                className="character-slot__clear-btn"
+                onClick={clearTurnaround}
+                title="Xóa ảnh 3 góc này"
+              >
+                ✕
+              </button>
               <div className="character-slot__hover-overlay">
                 <span>Thay ảnh</span>
               </div>
