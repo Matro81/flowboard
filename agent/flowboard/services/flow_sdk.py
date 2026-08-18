@@ -176,6 +176,18 @@ VIDEO_MODEL_KEYS: dict[str, dict[str, dict[str, str]]] = {
 DEFAULT_VIDEO_QUALITY = "fast"
 
 
+def normalize_video_aspect(aspect: Optional[str]) -> str:
+    """Normalize any recognized aspect ratio string into Flow's video aspect ratio enum."""
+    if not isinstance(aspect, str) or not aspect.strip():
+        return "VIDEO_ASPECT_RATIO_LANDSCAPE"
+    upper = aspect.strip().upper()
+    if upper == "VIDEO_ASPECT_RATIO_PORTRAIT" or upper == "IMAGE_ASPECT_RATIO_PORTRAIT" or "PORTRAIT" in upper or "9:16" in upper:
+        return "VIDEO_ASPECT_RATIO_PORTRAIT"
+    if upper == "VIDEO_ASPECT_RATIO_LANDSCAPE" or upper == "IMAGE_ASPECT_RATIO_LANDSCAPE" or upper == "IMAGE_ASPECT_RATIO_SQUARE" or "LANDSCAPE" in upper or "16:9" in upper or "SQUARE" in upper or "1:1" in upper:
+        return "VIDEO_ASPECT_RATIO_LANDSCAPE"
+    return aspect
+
+
 def resolve_video_model(
     paygate_tier: str, aspect_ratio: str, quality: Optional[str] = None
 ) -> Optional[str]:
@@ -184,6 +196,7 @@ def resolve_video_model(
     Falls back through (quality → fast) → (tier → TIER_ONE) → None so
     a stale frontend or unknown tier can't break dispatch silently.
     """
+    aspect = normalize_video_aspect(aspect_ratio)
     q = (quality or DEFAULT_VIDEO_QUALITY).lower()
     tier_map = (
         VIDEO_MODEL_KEYS.get(paygate_tier)
@@ -191,7 +204,7 @@ def resolve_video_model(
         or {}
     )
     quality_map = tier_map.get(q) or tier_map.get(DEFAULT_VIDEO_QUALITY) or {}
-    return quality_map.get(aspect_ratio)
+    return quality_map.get(aspect)
 
 # project_id must match the shape Google Flow returns (UUID-ish). Validated at
 # handler boundaries to prevent path traversal into arbitrary API URLs.
@@ -485,12 +498,13 @@ class FlowSDK:
         if not sources:
             return {"raw": None, "error": "missing_start_media_id"}
 
+        normalized_aspect = normalize_video_aspect(aspect_ratio)
         ts = int(time.time() * 1000)
         ctx = _client_context(project_id, paygate_tier)
         items: list[dict[str, Any]] = []
         for i, mid in enumerate(sources):
             items.append({
-                "aspectRatio": aspect_ratio,
+                "aspectRatio": normalized_aspect,
                 # Distinct seed per item so Flow doesn't dedupe.
                 "seed": (ts + i * 9973) % 1_000_000,
                 "textInput": {"structuredPrompt": {"parts": [{"text": prompt}]}},
@@ -557,7 +571,8 @@ class FlowSDK:
         """
         if paygate_tier is None:
             raise ValueError("paygate_tier is required")
-        if aspect_ratio not in OMNI_FLASH_VALID_ASPECTS:
+        normalized_aspect = normalize_video_aspect(aspect_ratio)
+        if normalized_aspect not in OMNI_FLASH_VALID_ASPECTS:
             return {
                 "raw": None,
                 "error": f"omni_aspect_unsupported_{aspect_ratio}",
@@ -574,7 +589,7 @@ class FlowSDK:
         used_seed = seed if seed is not None else ts % 1_000_000
         ctx = _client_context(project_id, paygate_tier)
         request_item = {
-            "aspectRatio": aspect_ratio,
+            "aspectRatio": normalized_aspect,
             "textInput": {"structuredPrompt": {"parts": [{"text": prompt}]}},
             "videoModelKey": model_key,
             "seed": used_seed,
@@ -622,6 +637,7 @@ class FlowSDK:
     async def check_async(
         self,
         operation_names: list[str],
+        *,
         workflows: Optional[list[dict[str, Any]]] = None,
     ) -> dict[str, Any]:
         """Poll one or more video operations. No captcha.
@@ -638,8 +654,6 @@ class FlowSDK:
         """
         ops_summary: list[dict[str, Any]] = []
         raw_old: Any = None
-        # Names that came from workflows are NOT valid operation handles —
-        # don't dispatch them to batchCheckAsync (Flow would 400).
         workflow_names = {w["name"] for w in (workflows or []) if isinstance(w, dict) and w.get("name")}
         old_names = [n for n in operation_names if n not in workflow_names]
         if old_names:
@@ -733,16 +747,23 @@ class FlowSDK:
                 continue
             status_code = resp.get("status")
             if isinstance(status_code, int) and status_code >= 400 and status_code != 404:
-                # Surface the inner Flow error (e.g. content filter).
+                # Surface real content filter errors
                 inner = _extract_inner_api_error(resp)
+                is_filter = bool(inner and ("FILTER" in inner or "POLICY" in inner or "BLOCKED" in inner or "SAFETY" in inner))
+                if is_filter:
+                    ops_summary.append(
+                        {
+                            "name": name,
+                            "done": True,
+                            "media_entries": [],
+                            "status": None,
+                            "error": inner,
+                        }
+                    )
+                    continue
+                # Other 400s (e.g. invalid argument before media is finalized) — treat as still pending and keep polling
                 ops_summary.append(
-                    {
-                        "name": name,
-                        "done": True,
-                        "media_entries": [],
-                        "status": None,
-                        "error": inner or f"API_{status_code}",
-                    }
+                    {"name": name, "done": False, "media_entries": [], "status": None, "error": None}
                 )
                 continue
 
@@ -1026,38 +1047,28 @@ def _extract_uploaded_media_id(resp: Any) -> Optional[str]:
 
 
 def extract_operation_names(resp: Any) -> list[str]:
-    """Pull ``operation.name`` out of a ``batchAsyncGenerateVideo*`` response.
-
-    Supports two shapes:
-
-    * **OLD** (Lite / Fast / Quality) — ``data.operations[].operation.name``.
-    * **NEW** (Low Priority — ``_low_priority`` / ``_relaxed`` models) —
-      ``data.workflows[].name``. Workflows don't have ``operation.name``;
-      callers that need to poll must also read ``primaryMediaId`` from
-      ``workflows[].metadata`` (see ``extract_video_workflows``).
-    """
+    """Pull operation IDs out of an async submit response."""
     if not isinstance(resp, dict):
         return []
     data = resp.get("data")
     if not isinstance(data, dict):
         return []
     names: list[str] = []
+
+    # 1. Top-level operations[]
     ops = data.get("operations")
     if isinstance(ops, list):
         for op in ops:
             if not isinstance(op, dict):
                 continue
             inner = op.get("operation") if isinstance(op.get("operation"), dict) else None
-            if inner is None:
-                # Some variants inline the name at top level.
-                name = op.get("name")
-            else:
-                name = inner.get("name")
+            name = op.get("name") if inner is None else inner.get("name")
             if isinstance(name, str) and name:
                 names.append(name)
     if names:
         return names
-    # NEW workflow schema — `data.workflows[]` instead of `data.operations[]`.
+
+    # 2. Workflow schema (Low Priority / Relaxed / Web)
     workflows = data.get("workflows")
     if isinstance(workflows, list):
         for wf in workflows:
@@ -1066,6 +1077,20 @@ def extract_operation_names(resp: Any) -> list[str]:
             name = wf.get("name")
             if isinstance(name, str) and name:
                 names.append(name)
+    if names:
+        return names
+
+    # 3. Media items with video operations
+    media = data.get("media")
+    if isinstance(media, list):
+        for item in media:
+            if not isinstance(item, dict):
+                continue
+            v = item.get("video") if isinstance(item.get("video"), dict) else {}
+            op = v.get("operation") if isinstance(v.get("operation"), dict) else {}
+            op_name = op.get("name") or item.get("name")
+            if isinstance(op_name, str) and op_name:
+                names.append(op_name)
     return names
 
 
