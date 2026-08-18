@@ -1032,10 +1032,35 @@ class FlowSDK:
         personality_notes: Optional[str] = None,
     ) -> dict[str, Any]:
         """Sync or create a character Entity on Google Flow (`/v1/flow/entities`).
+        If entity_id is None, mints a new Entity via TRPC `flow.createEntity`.
         Attaches portrait and turnaround image workflows and audio voice reference.
         """
-        import uuid as _uuid
-        actual_entity_id = entity_id or str(_uuid.uuid4())
+        actual_entity_id = entity_id
+        if not actual_entity_id:
+            # Step 1: Mint a new Character Entity on Google Flow via TRPC
+            logger.info("Minting new Character entity on Google Flow for project %s", project_id)
+            create_payload = {
+                "json": {
+                    "projectId": str(project_id),
+                    "entityInfo": {
+                        "entityType": "CHARACTER",
+                        "displayName": display_name,
+                    },
+                }
+            }
+            create_resp = await self._client.trpc_request(
+                "flow.createEntity",
+                create_payload,
+            )
+            actual_entity_id = _extract_entity_id(create_resp)
+            if not actual_entity_id:
+                logger.error("Failed to mint entity on Google Flow: %s", create_resp)
+                return {
+                    "raw": create_resp,
+                    "error": "failed_to_mint_entity_on_google_flow",
+                }
+            logger.info("Successfully minted Google Flow entityId: %s", actual_entity_id)
+
         update_fields: list[str] = ["entityInfo.displayName"]
         char_info: dict[str, Any] = {}
 
@@ -1078,7 +1103,7 @@ class FlowSDK:
             body=entity_payload,
         )
         if isinstance(resp, dict) and resp.get("error"):
-            return {"raw": resp, "error": resp["error"]}
+            return {"raw": resp, "error": resp["error"], "entity_id": actual_entity_id}
 
         return {
             "raw": resp,
@@ -1087,6 +1112,25 @@ class FlowSDK:
             "display_name": display_name,
             "url": f"https://labs.google/fx/tools/flow/project/{project_id}/character/{actual_entity_id}",
         }
+
+
+def _extract_entity_id(resp: Any) -> Optional[str]:
+    """Extract entityId from TRPC flow.createEntity response."""
+    if not isinstance(resp, dict):
+        return None
+    data = resp.get("data")
+    if isinstance(data, dict):
+        try:
+            eid = data["result"]["data"]["json"]["entityId"]
+            if eid:
+                return str(eid)
+        except (KeyError, TypeError):
+            pass
+        if "entityId" in data:
+            return str(data["entityId"])
+    if "entityId" in resp:
+        return str(resp["entityId"])
+    return None
 
 
 def _extract_project_id(resp: Any) -> Optional[str]:
