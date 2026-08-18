@@ -43,7 +43,7 @@ function render(status) {
   // Error
   const errSection = document.getElementById('error-section');
   const errRow     = document.getElementById('error-row');
-  if (m.lastError) {
+  if (m.lastError && (!status.connected || m.lastError !== 'WS_ERROR')) {
     errSection.style.display = 'flex';
     errRow.textContent = m.lastError;
   } else {

@@ -165,6 +165,8 @@ function connectToAgent() {
   ws.onopen = () => {
     console.log('[Flowboard] Connected to agent');
     chrome.alarms.clear('reconnect');
+    metrics.lastError = null;
+    chrome.storage.local.set({ metrics });
     setState('idle');
 
     const tokenAge = flowKey && metrics.tokenCapturedAt
