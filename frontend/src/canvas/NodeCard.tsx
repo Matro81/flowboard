@@ -445,9 +445,10 @@ function CharacterBody({ rfId, data }: { rfId: string; data: FlowboardNodeData }
         <div className="character-flow-id-row" onClick={(e) => e.stopPropagation()}>
           <div className="character-flow-id-label">
             <span>Google Flow Cast ID:</span>
-            {data.flowCharacterId && (
+            {typeof data.flowCharacterId === "string" &&
+            /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(data.flowCharacterId.trim()) && (
               <a
-                href={`https://labs.google/fx/tools/flow/project/${useGenerationStore.getState().projectId || "active"}/character/${data.flowCharacterId}`}
+                href={`https://labs.google/fx/tools/flow/project/${useGenerationStore.getState().projectId || "active"}/character/${data.flowCharacterId.trim()}`}
                 target="_blank"
                 rel="noreferrer"
                 className="character-flow-id-link"
