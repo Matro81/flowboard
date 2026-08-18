@@ -350,9 +350,35 @@ export function GenerationDialog() {
   const refSourceNodes = (!isVideo || isOmniVideo) && rfId
     ? edges
         .filter((e) => e.target === rfId)
-        .map((e) => {
+        .flatMap((e) => {
           const n = nodes.find((node) => node.id === e.source);
-          if (!n || !REF_SOURCE_TYPES.has(n.data.type)) return null;
+          if (!n || !REF_SOURCE_TYPES.has(n.data.type)) return [];
+
+          if (n.data.type === "character") {
+            const portrait = (n.data.portraitMediaId as string) || (n.data.mediaId as string);
+            const turnaround = n.data.turnaroundMediaId as string;
+            const entries = [];
+            if (portrait && typeof portrait === "string") {
+              entries.push({
+                edgeId: `${e.id}-portrait`,
+                node: n,
+                mediaId: portrait,
+                variantIdx: null,
+                allVariants: [portrait],
+              });
+            }
+            if (turnaround && typeof turnaround === "string") {
+              entries.push({
+                edgeId: `${e.id}-turnaround`,
+                node: n,
+                mediaId: turnaround,
+                variantIdx: null,
+                allVariants: [turnaround],
+              });
+            }
+            return entries;
+          }
+
           const variants = (Array.isArray(n.data.mediaIds) ? n.data.mediaIds : [])
             .filter((m): m is string => typeof m === "string" && m.length > 0);
           const pin = (e.data?.sourceVariantIdx ?? null) as number | null;
@@ -363,27 +389,21 @@ export function GenerationDialog() {
             variantIdx = pin;
           } else if (typeof n.data.mediaId === "string" && n.data.mediaId) {
             mediaId = n.data.mediaId;
-            // When dispatch falls back to source.mediaId, that's
-            // typically variants[0] (gen-result writes mediaId =
-            // mediaIds[0]). Surface that as the displayed variantIdx
-            // so the chip's badge matches what Flow will receive,
-            // even before the user clicks to pin explicitly.
             const idx = variants.indexOf(n.data.mediaId);
             variantIdx = idx >= 0 ? idx : null;
           } else if (variants.length > 0) {
             mediaId = variants[0];
             variantIdx = 0;
           }
-          if (!mediaId) return null;
-          return {
+          if (!mediaId) return [];
+          return [{
             edgeId: e.id,
             node: n,
             mediaId,
             variantIdx,
             allVariants: variants,
-          };
+          }];
         })
-        .filter((entry): entry is NonNullable<typeof entry> => entry !== null)
     : [];
 
   // Reset form when dialog opens for a different node

@@ -595,7 +595,7 @@ class FlowSDK:
             "seed": used_seed,
             "metadata": {},
             "referenceImages": [
-                {"mediaId": mid, "imageUsageType": "IMAGE_USAGE_TYPE_ASSET"}
+                {"mediaId": mid, "imageUsageType": "IMAGE_USAGE_TYPE_ASSET_IMAGE"}
                 for mid in cleaned_refs
             ],
         }
