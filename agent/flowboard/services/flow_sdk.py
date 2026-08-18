@@ -26,6 +26,7 @@ logger = logging.getLogger(__name__)
 FLOW_API_BASE = "https://aisandbox-pa.googleapis.com"
 TRPC_CREATE_PROJECT = "https://labs.google/fx/api/trpc/project.createProject"
 TRPC_SEARCH_PROJECTS = "https://labs.google/fx/api/trpc/project.searchUserProjects"
+TRPC_CREATE_ENTITY = "https://labs.google/fx/api/trpc/flow.createEntity"
 VIDEO_I2V_URL = f"{FLOW_API_BASE}/v1/video:batchAsyncGenerateVideoStartImage"
 # Omni Flash uses a separate endpoint that takes referenceImages[] (multi-
 # ref, asset-typed) instead of a single startImage. Different request shape
@@ -1049,8 +1050,10 @@ class FlowSDK:
                 }
             }
             create_resp = await self._client.trpc_request(
-                "flow.createEntity",
-                create_payload,
+                url=TRPC_CREATE_ENTITY,
+                method="POST",
+                headers=_TRPC_HEADERS,
+                body=create_payload,
             )
             actual_entity_id = _extract_entity_id(create_resp)
             if not actual_entity_id:
@@ -1103,6 +1106,36 @@ class FlowSDK:
             body=entity_payload,
         )
         if isinstance(resp, dict) and resp.get("error"):
+            # If PATCH with imageReferences failed (e.g. invalid workflowId), retry with displayName & voice only
+            if image_refs:
+                logger.warning("Image references rejected on Flow PATCH, retrying with display name & voice only")
+                fallback_fields = [f for f in update_fields if "imageReferences" not in f]
+                fallback_payload = {
+                    "entity": {
+                        "projectId": str(project_id),
+                        "entityId": actual_entity_id,
+                        "entityInfo": {
+                            "entityType": "CHARACTER",
+                            "displayName": display_name,
+                            "characterInfo": {k: v for k, v in char_info.items() if k != "imageReferences"},
+                        },
+                    },
+                    "updateMask": ",".join(fallback_fields),
+                }
+                fallback_resp = await self._client.api_request(
+                    url=ENTITIES_URL,
+                    method="PATCH",
+                    headers=dict(_API_HEADERS),
+                    body=fallback_payload,
+                )
+                if not (isinstance(fallback_resp, dict) and fallback_resp.get("error")):
+                    return {
+                        "raw": fallback_resp,
+                        "entity_id": actual_entity_id,
+                        "project_id": str(project_id),
+                        "display_name": display_name,
+                        "url": f"https://labs.google/fx/tools/flow/project/{project_id}/character/{actual_entity_id}",
+                    }
             return {"raw": resp, "error": resp["error"], "entity_id": actual_entity_id}
 
         return {

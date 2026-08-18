@@ -76,9 +76,9 @@ async def test_sdk_sync_flow_character_entity_mint_new():
     assert "character/minted-char-uuid-789" in res["url"]
     
     mock_client.trpc_request.assert_called_once()
-    trpc_call = mock_client.trpc_request.call_args
-    assert trpc_call[0][0] == "flow.createEntity"
-    assert trpc_call[0][1]["json"]["projectId"] == "test-proj-123"
+    trpc_kwargs = mock_client.trpc_request.call_args[1]
+    assert trpc_kwargs["url"] == "https://labs.google/fx/api/trpc/flow.createEntity"
+    assert trpc_kwargs["body"]["json"]["projectId"] == "test-proj-123"
     
     mock_client.api_request.assert_called_once()
     patch_call = mock_client.api_request.call_args[1]
