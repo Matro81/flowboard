@@ -224,7 +224,9 @@ function CharacterBody({ rfId, data }: { rfId: string; data: FlowboardNodeData }
       <div className="character-dual-grid">
         {/* Slot 1: Headshot */}
         <div
-          className={`character-slot ${dragOverHead ? "character-slot--over" : ""}`}
+          className={`character-slot ${dragOverHead ? "character-slot--over" : ""} ${
+            portraitMediaId ? "character-slot--has-media" : ""
+          }`}
           onDrop={(e) => {
             e.preventDefault();
             e.stopPropagation();
@@ -244,8 +246,13 @@ function CharacterBody({ rfId, data }: { rfId: string; data: FlowboardNodeData }
           }}
         >
           <div className="character-slot__header">
-            <span className="character-slot__label">◎ Chân dung (Mặt)</span>
+            <div className="character-slot__title-group">
+              <span className="character-slot__icon">◎</span>
+              <span className="character-slot__label">Khuôn mặt</span>
+            </div>
+            <span className="character-slot__badge">1:1</span>
           </div>
+
           {portraitMediaId ? (
             <div
               className="character-slot__preview"
@@ -255,31 +262,34 @@ function CharacterBody({ rfId, data }: { rfId: string; data: FlowboardNodeData }
               <img
                 className="character-slot__img"
                 src={mediaUrl(portraitMediaId)}
-                alt="Chân dung"
+                alt="Chân dung khuôn mặt"
               />
+              <div className="character-slot__hover-overlay">
+                <span>Thay ảnh</span>
+              </div>
               {uploadingHead && <span className="character-drop__overlay">…</span>}
             </div>
           ) : (
             <div className="character-slot__empty">
               {isProcessing ? (
-                <span className="visual-asset__hint">Generating…</span>
+                <span className="visual-asset__hint">Đang sinh…</span>
               ) : (
                 <div className="character-slot__actions">
                   <button
                     type="button"
-                    className="visual-asset__action"
+                    className="character-btn character-btn--secondary"
                     onClick={() => headInputRef.current?.click()}
                     disabled={uploadingHead}
                   >
-                    {uploadingHead ? "…" : "Upload"}
+                    {uploadingHead ? "…" : "↑ Tải ảnh"}
                   </button>
                   <button
                     type="button"
-                    className="visual-asset__action"
+                    className="character-btn character-btn--primary"
                     onClick={openGenerateHead}
                     disabled={uploadingHead}
                   >
-                    Generate
+                    ✦ Tạo mới
                   </button>
                 </div>
               )}
@@ -300,7 +310,9 @@ function CharacterBody({ rfId, data }: { rfId: string; data: FlowboardNodeData }
 
         {/* Slot 2: 3-Angle Turnaround Sheet */}
         <div
-          className={`character-slot ${dragOverBody ? "character-slot--over" : ""}`}
+          className={`character-slot ${dragOverBody ? "character-slot--over" : ""} ${
+            turnaroundMediaId ? "character-slot--has-media" : ""
+          }`}
           onDrop={(e) => {
             e.preventDefault();
             e.stopPropagation();
@@ -320,19 +332,27 @@ function CharacterBody({ rfId, data }: { rfId: string; data: FlowboardNodeData }
           }}
         >
           <div className="character-slot__header">
-            <span className="character-slot__label">▣ Toàn thân (3 góc)</span>
+            <div className="character-slot__title-group">
+              <span className="character-slot__icon">▣</span>
+              <span className="character-slot__label">Toàn thân 3 góc</span>
+            </div>
+            <span className="character-slot__badge">16:9</span>
           </div>
+
           {turnaroundMediaId ? (
             <div
-              className="character-slot__preview"
+              className="character-slot__preview character-slot__preview--turnaround"
               onClick={() => bodyInputRef.current?.click()}
               title="Nhấp để thay ảnh 3 góc"
             >
               <img
                 className="character-slot__img character-slot__img--turnaround"
                 src={mediaUrl(turnaroundMediaId)}
-                alt="Toàn thân 3 góc"
+                alt="Toàn thân 3 góc máy"
               />
+              <div className="character-slot__hover-overlay">
+                <span>Thay ảnh</span>
+              </div>
               {uploadingBody && <span className="character-drop__overlay">…</span>}
             </div>
           ) : (
@@ -340,15 +360,15 @@ function CharacterBody({ rfId, data }: { rfId: string; data: FlowboardNodeData }
               <div className="character-slot__actions">
                 <button
                   type="button"
-                  className="visual-asset__action"
+                  className="character-btn character-btn--secondary"
                   onClick={() => bodyInputRef.current?.click()}
                   disabled={uploadingBody}
                 >
-                  {uploadingBody ? "…" : "Upload"}
+                  {uploadingBody ? "…" : "↑ Tải ảnh"}
                 </button>
                 <button
                   type="button"
-                  className="visual-asset__action visual-asset__action--synth"
+                  className="character-btn character-btn--synth"
                   onClick={autoGenerateTurnaround}
                   disabled={generatingTurnaround || uploadingBody}
                   title="Sinh ảnh toàn thân 3 góc từ ảnh chân dung"
@@ -375,23 +395,41 @@ function CharacterBody({ rfId, data }: { rfId: string; data: FlowboardNodeData }
       {/* ── Google Flow Voice Selector ── */}
       <div className="character-voice-box">
         <div className="character-voice-header">
-          <span className="character-voice-title">🎙️ Giọng nhân vật (Google Flow Voice):</span>
+          <div className="character-voice-header__left">
+            <span className="character-voice-icon">🎙️</span>
+            <span className="character-voice-title">Giọng Google Flow</span>
+          </div>
+          {selectedVoice && (
+            <span
+              className={`character-voice-pill character-voice-pill--${selectedVoice.gender}`}
+            >
+              {selectedVoice.gender === "female" ? "♀ Nữ" : "♂ Nam"}
+            </span>
+          )}
         </div>
-        <select
-          className="character-voice-select"
-          value={currentVoiceId}
-          onChange={(e) => setVoice(e.target.value)}
-          aria-label="Chọn giọng cho nhân vật"
-        >
-          <option value="">-- Mặc định (Tự động) --</option>
-          {voices.map((v) => (
-            <option key={v.id} value={v.id}>
-              {v.gender === "female" ? "♀" : "♂"} {v.name} — {v.vibe}
-            </option>
-          ))}
-        </select>
+
+        <div className="character-voice-select-wrapper">
+          <select
+            className="character-voice-select"
+            value={currentVoiceId}
+            onChange={(e) => setVoice(e.target.value)}
+            aria-label="Chọn giọng cho nhân vật"
+          >
+            <option value="">-- Mặc định (Tự động) --</option>
+            {voices.map((v) => (
+              <option key={v.id} value={v.id}>
+                {v.gender === "female" ? "♀" : "♂"} {v.name} — {v.vibe}
+              </option>
+            ))}
+          </select>
+          <span className="character-voice-select__arrow">▾</span>
+        </div>
+
         {selectedVoice && (
-          <p className="character-voice-desc">{selectedVoice.description}</p>
+          <div className="character-voice-details">
+            <div className="character-voice-vibe-tag">{selectedVoice.vibe}</div>
+            <p className="character-voice-desc">{selectedVoice.description}</p>
+          </div>
         )}
       </div>
 
@@ -400,7 +438,7 @@ function CharacterBody({ rfId, data }: { rfId: string; data: FlowboardNodeData }
       {portraitMediaId && (
         <button
           type="button"
-          className="visual-asset__action"
+          className="character-library-btn"
           onClick={(e) => {
             e.stopPropagation();
             saveTileToLibrary({
@@ -417,11 +455,16 @@ function CharacterBody({ rfId, data }: { rfId: string; data: FlowboardNodeData }
           title="Lưu nhân vật vào thư viện tham chiếu"
           aria-label="Save to library"
         >
-          ★ Lưu nhân vật vào Library
+          <span className="character-library-btn__icon">★</span>
+          <span>Lưu nhân vật vào Library</span>
         </button>
       )}
 
-      {error && <p className="character-drop__error" role="alert">{error}</p>}
+      {error && (
+        <p className="character-drop__error" role="alert">
+          {error}
+        </p>
+      )}
     </div>
   );
 }
@@ -1695,8 +1738,10 @@ export function NodeCard(props: NodeProps<FlowNode>) {
   return (
     <div
       className={`node-card${isNote ? " node-card--note" : ""}${
-        props.selected ? " node-card--selected" : ""
-      }${llmBusy ? " node-card--llm-busy" : ""}`}
+        data.type === "character" ? " node-card--character" : ""
+      }${props.selected ? " node-card--selected" : ""}${
+        llmBusy ? " node-card--llm-busy" : ""
+      }`}
     >
       <StatusStrip status={data.status} />
       <Handle type="target" position={Position.Left} className="node-handle" />
