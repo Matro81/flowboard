@@ -36,4 +36,4 @@ async def test_sdk_sync_flow_character_entity():
     assert body["entity"]["entityId"] == "test-ent-456"
     assert body["entity"]["entityInfo"]["displayName"] == "Lan"
     assert len(body["entity"]["entityInfo"]["characterInfo"]["imageReferences"]) == 2
-    assert body["entity"]["entityInfo"]["characterInfo"]["audioReferences"][0]["voiceName"] == "Aoede"
+    assert body["entity"]["entityInfo"]["characterInfo"]["audioReferences"][0]["presetVoiceId"] == "Aoede"

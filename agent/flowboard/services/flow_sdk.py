@@ -596,7 +596,7 @@ class FlowSDK:
             "seed": used_seed,
             "metadata": {},
             "referenceImages": [
-                {"mediaId": mid, "imageUsageType": "IMAGE_USAGE_TYPE_ASSET_IMAGE"}
+                {"mediaId": mid, "imageUsageType": "IMAGE_USAGE_TYPE_REFERENCE_IMAGE"}
                 for mid in cleaned_refs
             ],
         }
@@ -1043,7 +1043,13 @@ class FlowSDK:
 
         audio_refs: list[dict[str, Any]] = []
         if voice_name:
-            audio_refs.append({"voiceName": voice_name})
+            audio_refs.append({"presetVoiceId": voice_name})
+
+        image_refs: list[dict[str, Any]] = []
+        if portrait_media_id:
+            image_refs.append({"workflowId": portrait_media_id})
+        if turnaround_media_id:
+            image_refs.append({"workflowId": turnaround_media_id})
 
         char_info: dict[str, Any] = {
             "imageReferences": image_refs,
